@@ -42,15 +42,21 @@ pub async fn get_tables(
 
     match db_type.as_str() {
         "postgresql" => {
-            let pool = manager.get_pg_pool(&connection_id).unwrap();
+            let pool = manager
+                .get_pg_pool(&connection_id)
+                .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
             schema::get_tables_pg(&pool).await
         }
         "mysql" => {
-            let pool = manager.get_mysql_pool(&connection_id).unwrap();
+            let pool = manager
+                .get_mysql_pool(&connection_id)
+                .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
             schema::get_tables_mysql(&pool).await
         }
         "sqlite" => {
-            let pool = manager.get_sqlite_pool(&connection_id).unwrap();
+            let pool = manager
+                .get_sqlite_pool(&connection_id)
+                .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
             schema::get_tables_sqlite(&pool).await
         }
         _ => Err("Unknown DB type".to_string()),
@@ -74,15 +80,21 @@ pub async fn execute_query(
 
     match db_type.as_str() {
         "postgresql" => {
-            let pool = manager.get_pg_pool(&connection_id).unwrap();
+            let pool = manager
+                .get_pg_pool(&connection_id)
+                .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
             query::execute_pg(&pool, &sql, limit, offset).await
         }
         "mysql" => {
-            let pool = manager.get_mysql_pool(&connection_id).unwrap();
+            let pool = manager
+                .get_mysql_pool(&connection_id)
+                .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
             query::execute_mysql(&pool, &sql, limit, offset).await
         }
         "sqlite" => {
-            let pool = manager.get_sqlite_pool(&connection_id).unwrap();
+            let pool = manager
+                .get_sqlite_pool(&connection_id)
+                .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
             query::execute_sqlite(&pool, &sql, limit, offset).await
         }
         _ => Err("DB type not yet supported for queries".to_string()),

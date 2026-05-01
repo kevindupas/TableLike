@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Search, HardDrive, RotateCcw, Plus } from "lucide-react";
 import { useConnectionStore, Connection } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
@@ -17,6 +18,12 @@ export function ConnectionsScreen() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const win = getCurrentWindow();
+    win.setResizable(false);
+    return () => { win.setResizable(true); };
+  }, []);
 
   const filtered = connections.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -57,7 +64,7 @@ export function ConnectionsScreen() {
       <div className="absolute inset-0 bg-linear-to-br from-muted/60 via-background to-muted/40 backdrop-blur-3xl pointer-events-none" />
 
       {/* LEFT: logo + footer only */}
-      <div className="flex flex-col w-48 shrink-0 relative z-10 bg-black/20 backdrop-blur-xl">
+      <div className="flex flex-col w-64 shrink-0 relative z-10 bg-black/20 backdrop-blur-xl">
         {/* Logo */}
         <div className="px-4 pt-5 pb-4 flex-1 flex flex-col items-center text-center">
           <svg width="52" height="52" viewBox="0 0 100 100">

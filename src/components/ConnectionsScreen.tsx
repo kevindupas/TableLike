@@ -52,7 +52,7 @@ export function ConnectionsScreen() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+    <div className="flex flex-col h-screen bg-muted/20 text-foreground overflow-hidden">
       {/* Top bar: arrow + search */}
       <div className="flex items-center h-8 border-b shrink-0 bg-background">
         <button className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0">
@@ -71,7 +71,7 @@ export function ConnectionsScreen() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <div className="w-52 flex flex-col shrink-0 bg-muted/20 border-r overflow-hidden">
+        <div className="w-52 flex flex-col shrink-0 bg-muted/40 border-r overflow-hidden">
           {/* Logo area */}
           <div className="px-3 pt-3 pb-2 flex items-center gap-2 border-b">
             <svg width="32" height="32" viewBox="0 0 100 100" className="shrink-0">
@@ -176,8 +176,8 @@ export function ConnectionsScreen() {
           </div>
         </div>
 
-        {/* Right area — empty like TablePlus */}
-        <div className="flex-1 bg-muted/30" />
+        {/* Right area — same bg as window */}
+        <div className="flex-1 bg-muted/10" />
       </div>
 
       <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />

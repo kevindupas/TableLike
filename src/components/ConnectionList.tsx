@@ -17,7 +17,7 @@ export function ConnectionList() {
   );
 
   return (
-    <div className="flex flex-col h-full w-60 border-r bg-background">
+    <div className="flex flex-col bg-background border-b">
       <div className="p-3 border-b">
         <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />

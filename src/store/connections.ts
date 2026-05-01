@@ -17,8 +17,10 @@ export interface Connection {
 interface ConnectionStore {
   connections: Connection[];
   activeConnectionId: string | null;
+  activeTable: { schema: string; name: string } | null;
   connectedIds: Set<string>;
   setActiveConnection: (id: string) => void;
+  setActiveTable: (table: { schema: string; name: string } | null) => void;
   addConnection: (conn: Connection) => void;
   removeConnection: (id: string) => void;
   setConnected: (id: string, connected: boolean) => void;
@@ -27,8 +29,10 @@ interface ConnectionStore {
 export const useConnectionStore = create<ConnectionStore>()((set) => ({
   connections: [],
   activeConnectionId: null,
+  activeTable: null,
   connectedIds: new Set<string>(),
-  setActiveConnection: (id) => set({ activeConnectionId: id }),
+  setActiveConnection: (id) => set({ activeConnectionId: id, activeTable: null }),
+  setActiveTable: (table) => set({ activeTable: table }),
   addConnection: (conn) =>
     set((state) => ({ connections: [...state.connections, conn] })),
   removeConnection: (id) => {

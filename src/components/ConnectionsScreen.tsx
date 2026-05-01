@@ -57,7 +57,7 @@ export function ConnectionsScreen() {
       {/* LEFT: logo + footer only */}
       <div className="flex flex-col w-48 shrink-0 border-r">
         {/* Logo */}
-        <div className="px-4 pt-5 pb-4 flex-1">
+        <div className="px-4 pt-5 pb-4 flex-1 flex flex-col items-center text-center">
           <svg width="52" height="52" viewBox="0 0 100 100">
             <ellipse cx="50" cy="55" rx="30" ry="26" fill="#d4891a" />
             <ellipse cx="50" cy="40" rx="24" ry="22" fill="#e8a020" />

@@ -52,10 +52,12 @@ export function ConnectionsScreen() {
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden relative">
+      {/* Blurred background layer */}
+      <div className="absolute inset-0 bg-linear-to-br from-muted/60 via-background to-muted/40 backdrop-blur-3xl pointer-events-none" />
 
       {/* LEFT: logo + footer only */}
-      <div className="flex flex-col w-48 shrink-0">
+      <div className="flex flex-col w-48 shrink-0 relative z-10 bg-background/40 backdrop-blur-xl border-r border-white/10">
         {/* Logo */}
         <div className="px-4 pt-5 pb-4 flex-1 flex flex-col items-center text-center">
           <svg width="52" height="52" viewBox="0 0 100 100">
@@ -103,7 +105,7 @@ export function ConnectionsScreen() {
       </div>
 
       {/* RIGHT: searchbar + connections list below */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 overflow-hidden relative z-10 bg-background/20 backdrop-blur-xl">
         {/* Search bar */}
         <div className="flex items-center h-10 shrink-0 px-2 gap-1">
           <button onClick={() => setDialogOpen(true)} className="text-muted-foreground hover:text-foreground shrink-0">

@@ -34,7 +34,7 @@ export function DatabaseScreen() {
     else setTheme("light");
   }
 
-  const resolvedTheme = theme ?? "system";
+  const selectedTheme = theme ?? "system";
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -96,11 +96,11 @@ export function DatabaseScreen() {
             size="icon"
             className="h-7 w-7"
             onClick={cycleTheme}
-            title={`Theme: ${resolvedTheme}`}
+            title={`Theme: ${selectedTheme}`}
           >
-            {resolvedTheme === "dark" ? (
+            {selectedTheme === "dark" ? (
               <Moon className="h-4 w-4" />
-            ) : resolvedTheme === "light" ? (
+            ) : selectedTheme === "light" ? (
               <Sun className="h-4 w-4" />
             ) : (
               <Monitor className="h-4 w-4" />
@@ -123,7 +123,9 @@ export function DatabaseScreen() {
         </div>
 
         {/* Main */}
-        <MainPanel />
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <MainPanel />
+        </div>
 
         {/* Detail panel */}
         {showDetailPanel && activeTab && (

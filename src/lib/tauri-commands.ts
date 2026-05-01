@@ -23,3 +23,15 @@ export async function disconnectDb(connectionId: string): Promise<void> {
 export async function checkConnection(connectionId: string): Promise<boolean> {
   return invoke<boolean>("check_connection", { connectionId });
 }
+
+export async function savePassword(connectionId: string, password: string): Promise<void> {
+  return invoke<void>("save_password", { connectionId, password });
+}
+
+export async function getPassword(connectionId: string): Promise<string> {
+  return invoke<string>("get_password", { connectionId });
+}
+
+export async function deletePassword(connectionId: string): Promise<void> {
+  return invoke<void>("delete_password", { connectionId });
+}

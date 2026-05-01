@@ -1,9 +1,11 @@
 import { ConnectionList } from "./components/ConnectionList";
 import { SchemaTree } from "./components/SchemaTree";
+import { MainPanel } from "./components/MainPanel";
 import { useConnectionStore } from "./store/connections";
 
 function App() {
-  const { activeConnectionId, activeTable, setActiveTable } = useConnectionStore();
+  const { activeConnectionId, activeTable, setActiveTable } =
+    useConnectionStore();
 
   function handleTableSelect(schema: string, name: string) {
     setActiveTable({ schema, name });
@@ -24,17 +26,16 @@ function App() {
       </div>
 
       {/* Main area */}
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        {activeTable ? (
-          <p className="text-sm">
-            Selected: {activeTable.schema}.{activeTable.name}
-          </p>
-        ) : activeConnectionId ? (
-          <p className="text-sm">Select a table from the sidebar</p>
-        ) : (
+      {activeConnectionId ? (
+        <MainPanel
+          connectionId={activeConnectionId}
+          initialTable={activeTable ?? undefined}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
           <p className="text-sm">Select a connection to get started</p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

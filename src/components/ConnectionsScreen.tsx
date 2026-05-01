@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Search, HardDrive, RotateCcw, Plus } from "lucide-react";
+import { Search, HardDrive, RotateCcw, Plus } from "lucide-react";
 import { useConnectionStore, Connection } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
 import { connectDb, getPassword } from "../lib/tauri-commands";
@@ -55,7 +55,7 @@ export function ConnectionsScreen() {
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
 
       {/* LEFT: logo + footer only */}
-      <div className="flex flex-col w-48 shrink-0 border-r">
+      <div className="flex flex-col w-48 shrink-0">
         {/* Logo */}
         <div className="px-4 pt-5 pb-4 flex-1 flex flex-col items-center text-center">
           <svg width="52" height="52" viewBox="0 0 100 100">
@@ -83,7 +83,7 @@ export function ConnectionsScreen() {
         </div>
 
         {/* Footer */}
-        <div className="border-t px-1.5 py-2 space-y-0.5">
+        <div className="px-1.5 py-2 space-y-0.5">
           <button className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
             <HardDrive className="h-3 w-3 shrink-0" />
             Backup database...
@@ -105,8 +105,10 @@ export function ConnectionsScreen() {
       {/* RIGHT: searchbar + connections list below */}
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Search bar */}
-        <div className="flex items-center h-8 border-b shrink-0 px-2 gap-1">
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <div className="flex items-center h-8 shrink-0 px-2 gap-1">
+          <button onClick={() => setDialogOpen(true)} className="text-muted-foreground hover:text-foreground shrink-0">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
           <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <input
             placeholder="Search for connections..."

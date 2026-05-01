@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { disconnectDb } from "../lib/tauri-commands";
 
 export type DbType = "postgresql" | "mysql" | "sqlite";
 
@@ -30,7 +31,8 @@ export const useConnectionStore = create<ConnectionStore>()((set) => ({
   setActiveConnection: (id) => set({ activeConnectionId: id }),
   addConnection: (conn) =>
     set((state) => ({ connections: [...state.connections, conn] })),
-  removeConnection: (id) =>
+  removeConnection: (id) => {
+    disconnectDb(id).catch(() => {});
     set((state) => {
       const connectedIds = new Set(state.connectedIds);
       connectedIds.delete(id);
@@ -40,7 +42,8 @@ export const useConnectionStore = create<ConnectionStore>()((set) => ({
           state.activeConnectionId === id ? null : state.activeConnectionId,
         connectedIds,
       };
-    }),
+    });
+  },
   setConnected: (id, connected) =>
     set((state) => {
       const connectedIds = new Set(state.connectedIds);

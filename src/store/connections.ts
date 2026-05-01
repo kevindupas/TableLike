@@ -21,6 +21,7 @@ interface ConnectionStore {
   connectedIds: Set<string>;
   setActiveConnection: (id: string) => void;
   addConnection: (conn: Connection) => void;
+  updateConnection: (id: string, patch: Partial<Omit<Connection, "id">>) => void;
   removeConnection: (id: string) => void;
   setConnected: (id: string, connected: boolean) => void;
 }
@@ -34,6 +35,12 @@ export const useConnectionStore = create<ConnectionStore>()(
       setActiveConnection: (id) => set({ activeConnectionId: id }),
       addConnection: (conn) =>
         set((state) => ({ connections: [...state.connections, conn] })),
+      updateConnection: (id, patch) =>
+        set((state) => ({
+          connections: state.connections.map((c) =>
+            c.id === id ? { ...c, ...patch } : c
+          ),
+        })),
       removeConnection: (id) => {
         disconnectDb(id).catch(() => {});
         deletePassword(id).catch(() => {});

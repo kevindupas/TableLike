@@ -3,6 +3,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Search, HardDrive, RotateCcw, Plus } from "lucide-react";
 import { useConnectionStore, Connection } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
+import { EditConnectionDialog } from "./EditConnectionDialog";
+import { ConnectionContextMenu } from "./ConnectionContextMenu";
 import { connectDb, getPassword } from "../lib/tauri-commands";
 
 const DB_LABELS: Record<string, string> = {
@@ -18,9 +20,13 @@ export function ConnectionsScreen() {
     connectedIds,
     setActiveConnection,
     setConnected,
+    removeConnection,
+    addConnection,
   } = useConnectionStore();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editConn, setEditConn] = useState<Connection | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ conn: Connection; x: number; y: number } | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
 
@@ -158,6 +164,10 @@ export function ConnectionsScreen() {
                   setActiveConnection(conn.id);
                   setConnectError(null);
                 }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ conn, x: e.clientX, y: e.clientY });
+                }}
                 disabled={isLoading}
                 className={`flex items-center gap-2 w-full px-4 py-2.5 rounded text-left transition-colors ${
                   isActive
@@ -212,6 +222,32 @@ export function ConnectionsScreen() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
       />
+
+      <EditConnectionDialog
+        conn={editConn}
+        onClose={() => setEditConn(null)}
+      />
+
+      {contextMenu && (
+        <ConnectionContextMenu
+          conn={contextMenu.conn}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onConnect={() => handleConnect(contextMenu.conn)}
+          onEdit={() => setEditConn(contextMenu.conn)}
+          onDuplicate={() => {
+            const src = contextMenu.conn;
+            addConnection({
+              ...src,
+              id: crypto.randomUUID(),
+              name: `${src.name} copy`,
+            });
+          }}
+          onDelete={() => removeConnection(contextMenu.conn.id)}
+          onNewConnection={() => setDialogOpen(true)}
+        />
+      )}
     </div>
   );
 }

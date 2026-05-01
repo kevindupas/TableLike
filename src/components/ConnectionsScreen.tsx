@@ -105,7 +105,7 @@ export function ConnectionsScreen() {
       {/* RIGHT: searchbar + connections list below */}
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Search bar */}
-        <div className="flex items-center h-8 shrink-0 px-2 gap-1">
+        <div className="flex items-center h-10 shrink-0 px-2 gap-1">
           <button onClick={() => setDialogOpen(true)} className="text-muted-foreground hover:text-foreground shrink-0">
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -113,7 +113,7 @@ export function ConnectionsScreen() {
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
             <input
             placeholder="Search for connections..."
-            className="w-full h-5 text-xs bg-muted/40 border border-border rounded pl-6 pr-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+            className="w-full h-7 text-xs bg-muted/40 border border-border rounded pl-6 pr-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             />

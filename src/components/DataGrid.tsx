@@ -53,23 +53,7 @@ function renderCell(cell: CellValue): ReactNode {
 }
 
 export function DataGrid({ result, onShowMap }: Props) {
-  if (!result) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-        Run a query to see results
-      </div>
-    );
-  }
-
-  if (result.columns.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-        Query returned no results
-      </div>
-    );
-  }
-
-  const columns: ColumnDef<CellValue[], unknown>[] = result.columns.map(
+  const columns: ColumnDef<CellValue[], unknown>[] = (result?.columns ?? []).map(
     (col, i) => ({
       id: `col-${i}`,
       header: () => (
@@ -90,10 +74,26 @@ export function DataGrid({ result, onShowMap }: Props) {
   );
 
   const table = useReactTable({
-    data: result.rows,
+    data: result?.rows ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
+
+  if (!result) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        Run a query to see results
+      </div>
+    );
+  }
+
+  if (result.columns.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        Query returned no results
+      </div>
+    );
+  }
 
   const geoColumns = result.columns
     .map((c, i) => ({ ...c, index: i }))
@@ -104,7 +104,11 @@ export function DataGrid({ result, onShowMap }: Props) {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/20 text-xs text-muted-foreground shrink-0">
         <span>
-          {result.rows.length} rows · {result.execution_time_ms}ms
+          {result.rows.length} rows
+          {result.total_count !== null && result.total_count !== result.rows.length
+            ? ` of ${result.total_count}`
+            : ""}
+          {" "}· {result.execution_time_ms}ms
         </span>
         {geoColumns.length > 0 && onShowMap && (
           <button

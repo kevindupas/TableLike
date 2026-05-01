@@ -84,7 +84,7 @@ export function ConnectionsScreen() {
               <button
                 key={conn.id}
                 onDoubleClick={() => handleConnect(conn)}
-                onClick={() => setActiveConnection(conn.id)}
+                onClick={() => { setActiveConnection(conn.id); setConnectError(null); }}
                 disabled={isLoading}
                 className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-left transition-colors ${
                   conn.id === activeConnectionId

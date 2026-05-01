@@ -100,3 +100,24 @@ pub async fn execute_query(
         _ => Err("DB type not yet supported for queries".to_string()),
     }
 }
+
+#[tauri::command]
+pub fn save_password(connection_id: String, password: String) -> Result<(), String> {
+    let entry = keyring::Entry::new("tablelike", &connection_id)
+        .map_err(|e| e.to_string())?;
+    entry.set_password(&password).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_password(connection_id: String) -> Result<String, String> {
+    let entry = keyring::Entry::new("tablelike", &connection_id)
+        .map_err(|e| e.to_string())?;
+    entry.get_password().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_password(connection_id: String) -> Result<(), String> {
+    let entry = keyring::Entry::new("tablelike", &connection_id)
+        .map_err(|e| e.to_string())?;
+    entry.delete_credential().map_err(|e| e.to_string())
+}

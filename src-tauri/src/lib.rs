@@ -14,6 +14,9 @@ pub fn run() {
             commands::check_connection,
             commands::get_tables,
             commands::execute_query,
+            commands::save_password,
+            commands::get_password,
+            commands::delete_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

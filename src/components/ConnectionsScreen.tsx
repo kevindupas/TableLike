@@ -112,7 +112,7 @@ export function ConnectionsScreen() {
           <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <input
             placeholder="Search for connections..."
-            className="flex-1 h-full text-xs bg-transparent outline-none placeholder:text-muted-foreground"
+            className="flex-1 h-5 text-xs bg-muted/40 border border-border rounded px-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

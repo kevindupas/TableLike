@@ -2,6 +2,15 @@ use sqlx::Column;
 use sqlx::Row;
 use sqlx::TypeInfo;
 use crate::db::types::{CellValue, ColumnInfo, QueryResult};
+use geozero::wkb::Ewkb;
+use geozero::ToJson;
+
+fn wkb_to_geojson(bytes: Vec<u8>) -> Result<serde_json::Value, String> {
+    Ewkb(bytes)
+        .to_json()
+        .map_err(|e| e.to_string())
+        .and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+}
 
 pub async fn execute_pg(
     pool: &sqlx::PgPool,
@@ -46,7 +55,14 @@ pub async fn execute_pg(
                 .enumerate()
                 .map(|(i, col)| {
                     if col.is_geo {
-                        CellValue::Text("[geometry]".to_string())
+                        if let Ok(bytes) = row.try_get::<Vec<u8>, _>(i) {
+                            match wkb_to_geojson(bytes) {
+                                Ok(json) => CellValue::Geo(json),
+                                Err(_) => CellValue::Text("[invalid geometry]".to_string()),
+                            }
+                        } else {
+                            CellValue::Null
+                        }
                     } else {
                         row.try_get::<String, _>(i)
                             .map(CellValue::Text)

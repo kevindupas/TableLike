@@ -109,13 +109,15 @@ export function ConnectionsScreen() {
           <button onClick={() => setDialogOpen(true)} className="text-muted-foreground hover:text-foreground shrink-0">
             <Plus className="h-3.5 w-3.5" />
           </button>
-          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <input
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+            <input
             placeholder="Search for connections..."
-            className="flex-1 h-5 text-xs bg-muted/40 border border-border rounded px-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+            className="w-full h-5 text-xs bg-muted/40 border border-border rounded pl-6 pr-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-          />
+            />
+          </div>
         </div>
 
         {/* Connections list — full width, under searchbar */}

@@ -4,11 +4,13 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { ConnectionItem } from "./ConnectionItem";
 import { useConnectionStore } from "../store/connections";
+import { NewConnectionDialog } from "./NewConnectionDialog";
 
 export function ConnectionList() {
   const { connections, activeConnectionId, setActiveConnection } =
     useConnectionStore();
   const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const filtered = connections.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -45,11 +47,21 @@ export function ConnectionList() {
       </div>
 
       <div className="p-3 border-t">
-        <Button variant="outline" className="w-full gap-2" size="sm">
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          size="sm"
+          onClick={() => setDialogOpen(true)}
+        >
           <Plus className="h-4 w-4" />
           Create connection
         </Button>
       </div>
+
+      <NewConnectionDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+      />
     </div>
   );
 }

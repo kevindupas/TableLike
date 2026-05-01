@@ -22,7 +22,11 @@ export function ConnectionsScreen() {
   useEffect(() => {
     const win = getCurrentWindow();
     win.setResizable(false);
-    return () => { win.setResizable(true); };
+    win.setMaximizable(false);
+    return () => {
+      win.setResizable(true);
+      win.setMaximizable(true);
+    };
   }, []);
 
   const filtered = connections.filter((c) =>
@@ -67,7 +71,7 @@ export function ConnectionsScreen() {
       <div className="flex flex-col w-64 shrink-0 relative z-10 bg-black/20 backdrop-blur-xl">
         {/* Logo */}
         <div className="px-4 pt-5 pb-4 flex-1 flex flex-col items-center text-center">
-          <svg width="52" height="52" viewBox="0 0 100 100">
+          <svg width="80" height="80" viewBox="0 0 100 100">
             <ellipse cx="50" cy="55" rx="30" ry="26" fill="#d4891a" />
             <ellipse cx="50" cy="40" rx="24" ry="22" fill="#e8a020" />
             <ellipse cx="24" cy="36" rx="11" ry="14" fill="#e8a020" />
@@ -82,7 +86,7 @@ export function ConnectionsScreen() {
             <path d="M43 49 Q36 55 33 62" stroke="#f0d090" strokeWidth="3.5" fill="none" strokeLinecap="round" />
             <path d="M57 49 Q64 55 67 62" stroke="#f0d090" strokeWidth="3.5" fill="none" strokeLinecap="round" />
           </svg>
-          <div className="text-base font-bold mt-1">TableLike</div>
+          <div className="text-xl font-bold mt-2">TableLike</div>
           <div className="text-[10px] text-muted-foreground">Version 0.1.0 (beta)</div>
           <div className="text-[10px] text-orange-400">Open Source Preview</div>
           <div className="flex gap-1.5 mt-2">

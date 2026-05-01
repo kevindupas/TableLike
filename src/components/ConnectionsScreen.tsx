@@ -12,8 +12,13 @@ const DB_LABELS: Record<string, string> = {
 };
 
 export function ConnectionsScreen() {
-  const { connections, activeConnectionId, connectedIds, setActiveConnection, setConnected } =
-    useConnectionStore();
+  const {
+    connections,
+    activeConnectionId,
+    connectedIds,
+    setActiveConnection,
+    setConnected,
+  } = useConnectionStore();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -30,7 +35,7 @@ export function ConnectionsScreen() {
   }, []);
 
   const filtered = connections.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   async function handleConnect(conn: Connection) {
@@ -71,43 +76,35 @@ export function ConnectionsScreen() {
       <div className="flex flex-col w-64 shrink-0 relative z-10 bg-black/20 backdrop-blur-xl">
         {/* Logo */}
         <div className="px-4 pt-5 pb-4 flex-1 flex flex-col items-center text-center">
-          <svg width="160" height="160" viewBox="0 0 100 100">
-            <ellipse cx="50" cy="55" rx="30" ry="26" fill="#d4891a" />
-            <ellipse cx="50" cy="40" rx="24" ry="22" fill="#e8a020" />
-            <ellipse cx="24" cy="36" rx="11" ry="14" fill="#e8a020" />
-            <ellipse cx="76" cy="36" rx="11" ry="14" fill="#e8a020" />
-            <ellipse cx="24" cy="36" rx="7" ry="10" fill="#d4891a" />
-            <ellipse cx="76" cy="36" rx="7" ry="10" fill="#d4891a" />
-            <circle cx="43" cy="36" r="3.5" fill="#fff" />
-            <circle cx="57" cy="36" r="3.5" fill="#fff" />
-            <circle cx="44" cy="37" r="2" fill="#1a1a1a" />
-            <circle cx="58" cy="37" r="2" fill="#1a1a1a" />
-            <path d="M44 50 Q37 58 39 68 Q41 74 45 72 Q47 65 50 60" stroke="#d4891a" strokeWidth="6" fill="none" strokeLinecap="round" />
-            <path d="M43 49 Q36 55 33 62" stroke="#f0d090" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-            <path d="M57 49 Q64 55 67 62" stroke="#f0d090" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-          </svg>
+          <img src="/logo.png" alt="TableLike" width={160} height={160} />
           <div className="text-xl font-bold mt-2">TableLike</div>
-          <div className="text-[10px] text-muted-foreground">Version 0.1.0 (beta)</div>
+          <div className="text-[10px] text-muted-foreground">
+            Version 0.1.0 (beta)
+          </div>
           <div className="text-[10px] text-orange-400">Open Source Preview</div>
           <div className="flex gap-1.5 mt-2">
-            <button className="px-2 py-0.5 text-[10px] border rounded text-muted-foreground hover:bg-muted">GitHub</button>
-            <button className="px-2 py-0.5 text-[10px] border rounded text-muted-foreground hover:bg-muted">Docs</button>
+            <button className="px-2 py-0.5 text-[10px] border rounded text-muted-foreground hover:bg-muted">
+              GitHub
+            </button>
+            <button className="px-2 py-0.5 text-[10px] border rounded text-muted-foreground hover:bg-muted">
+              Docs
+            </button>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-2 py-2 space-y-1">
-          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
+        <div className="px-6 py-2 space-y-2.5 mb-8">
+          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
             <HardDrive className="h-3.5 w-3.5 shrink-0" />
             Backup database...
           </button>
-          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
+          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
             <RotateCcw className="h-3.5 w-3.5 shrink-0" />
             Restore database...
           </button>
           <button
             onClick={() => setDialogOpen(true)}
-            className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors"
+            className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors"
           >
             <Plus className="h-3.5 w-3.5 shrink-0" />
             Create connection...
@@ -119,16 +116,19 @@ export function ConnectionsScreen() {
       <div className="flex flex-col flex-1 overflow-hidden relative z-10 bg-background/20 backdrop-blur-xl">
         {/* Search bar */}
         <div className="flex items-center h-10 shrink-0 px-2 gap-1">
-          <button onClick={() => setDialogOpen(true)} className="text-muted-foreground hover:text-foreground shrink-0">
+          <button
+            onClick={() => setDialogOpen(true)}
+            className="text-muted-foreground hover:text-foreground shrink-0"
+          >
             <Plus className="h-3.5 w-3.5" />
           </button>
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
             <input
-            placeholder="Search for connections..."
-            className="w-full h-7 text-xs bg-muted/40 border border-border rounded pl-6 pr-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search for connections..."
+              className="w-full h-7 text-xs bg-muted/40 border border-border rounded pl-6 pr-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>
@@ -138,7 +138,12 @@ export function ConnectionsScreen() {
           {connectError && (
             <div className="mb-2 px-2 py-1.5 rounded bg-destructive/10 border border-destructive/20">
               <p className="text-[10px] text-destructive">{connectError}</p>
-              <button onClick={() => setConnectError(null)} className="text-[10px] underline text-muted-foreground">Dismiss</button>
+              <button
+                onClick={() => setConnectError(null)}
+                className="text-[10px] underline text-muted-foreground"
+              >
+                Dismiss
+              </button>
             </div>
           )}
           {filtered.map((conn) => {
@@ -149,15 +154,20 @@ export function ConnectionsScreen() {
               <button
                 key={conn.id}
                 onDoubleClick={() => handleConnect(conn)}
-                onClick={() => { setActiveConnection(conn.id); setConnectError(null); }}
+                onClick={() => {
+                  setActiveConnection(conn.id);
+                  setConnectError(null);
+                }}
                 disabled={isLoading}
-                className={`flex items-center gap-2 w-full px-2 py-1.5 rounded text-left transition-colors ${
-                  isActive ? "bg-accent text-accent-foreground" : "hover:bg-muted/60"
+                className={`flex items-center gap-2 w-full px-4 py-2.5 rounded text-left transition-colors ${
+                  isActive
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-muted/60"
                 }`}
               >
                 <div className="relative shrink-0">
                   <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[14px]"
                     style={{ backgroundColor: conn.color }}
                   >
                     {isLoading ? "…" : DB_LABELS[conn.type]}
@@ -168,14 +178,23 @@ export function ConnectionsScreen() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1">
-                    <span className="text-xs font-semibold truncate">{conn.name}</span>
-                    <span className="text-[9px] px-1 rounded font-medium shrink-0"
-                      style={{ backgroundColor: conn.color + "28", color: conn.color }}>
+                    <span className="text-xs font-semibold truncate">
+                      {conn.name}
+                    </span>
+                    <span
+                      className="text-[11px] px-1 rounded font-medium shrink-0"
+                      style={{
+                        backgroundColor: conn.color + "28",
+                        color: conn.color,
+                      }}
+                    >
                       {conn.type === "sqlite" ? "file" : "local"}
                     </span>
                   </div>
                   <div className="text-[10px] text-muted-foreground truncate italic">
-                    {conn.type === "sqlite" ? conn.database : `${conn.host}:${conn.port}`}
+                    {conn.type === "sqlite"
+                      ? conn.database
+                      : `${conn.host}:${conn.port}`}
                   </div>
                 </div>
               </button>
@@ -189,7 +208,10 @@ export function ConnectionsScreen() {
         </div>
       </div>
 
-      <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <NewConnectionDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+      />
     </div>
   );
 }

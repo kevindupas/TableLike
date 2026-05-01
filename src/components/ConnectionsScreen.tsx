@@ -73,9 +73,8 @@ export function ConnectionsScreen() {
         {/* Sidebar */}
         <div className="w-52 flex flex-col shrink-0 bg-muted/20 border-r overflow-hidden">
           {/* Logo area */}
-          <div className="px-4 pt-4 pb-3 flex flex-col items-center text-center">
-            {/* Elephant SVG */}
-            <svg width="56" height="56" viewBox="0 0 100 100" className="mb-1">
+          <div className="px-3 pt-3 pb-2 flex items-center gap-2 border-b">
+            <svg width="32" height="32" viewBox="0 0 100 100" className="shrink-0">
               <ellipse cx="50" cy="55" rx="30" ry="26" fill="#d4891a" />
               <ellipse cx="50" cy="40" rx="24" ry="22" fill="#e8a020" />
               <ellipse cx="24" cy="36" rx="11" ry="14" fill="#e8a020" />
@@ -86,22 +85,13 @@ export function ConnectionsScreen() {
               <circle cx="57" cy="36" r="3.5" fill="#fff" />
               <circle cx="44" cy="37" r="2" fill="#1a1a1a" />
               <circle cx="58" cy="37" r="2" fill="#1a1a1a" />
-              <ellipse cx="44" cy="37.5" rx="0.7" ry="0.7" fill="#fff" />
-              <ellipse cx="58" cy="37.5" rx="0.7" ry="0.7" fill="#fff" />
               <path d="M44 50 Q37 58 39 68 Q41 74 45 72 Q47 65 50 60" stroke="#d4891a" strokeWidth="6" fill="none" strokeLinecap="round" />
               <path d="M43 49 Q36 55 33 62" stroke="#f0d090" strokeWidth="3.5" fill="none" strokeLinecap="round" />
               <path d="M57 49 Q64 55 67 62" stroke="#f0d090" strokeWidth="3.5" fill="none" strokeLinecap="round" />
             </svg>
-            <div className="text-sm font-bold tracking-tight">TableLike</div>
-            <div className="text-[10px] text-muted-foreground leading-tight">Version 0.1.0 (beta)</div>
-            <div className="text-[10px] text-orange-400 mt-0.5 leading-tight">Open Source Preview</div>
-            <div className="flex gap-1.5 mt-2">
-              <button className="px-2.5 py-0.5 text-[10px] border rounded text-muted-foreground hover:bg-muted transition-colors">
-                GitHub
-              </button>
-              <button className="px-2.5 py-0.5 text-[10px] border rounded text-muted-foreground hover:bg-muted transition-colors">
-                Docs
-              </button>
+            <div>
+              <div className="text-sm font-bold leading-tight">TableLike</div>
+              <div className="text-[10px] text-muted-foreground leading-tight">v0.1.0 (beta)</div>
             </div>
           </div>
 
@@ -187,7 +177,7 @@ export function ConnectionsScreen() {
         </div>
 
         {/* Right area — empty like TablePlus */}
-        <div className="flex-1 bg-muted/5" />
+        <div className="flex-1 bg-muted/30" />
       </div>
 
       <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />

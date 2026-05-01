@@ -54,11 +54,10 @@ export function ConnectionsScreen() {
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
 
-      {/* LEFT COLUMN: logo + connections list + footer */}
-      <div className="flex flex-col w-56 shrink-0 overflow-hidden">
-
+      {/* LEFT: logo + footer only */}
+      <div className="flex flex-col w-48 shrink-0 border-r">
         {/* Logo */}
-        <div className="px-4 pt-5 pb-4">
+        <div className="px-4 pt-5 pb-4 flex-1">
           <svg width="52" height="52" viewBox="0 0 100 100">
             <ellipse cx="50" cy="55" rx="30" ry="26" fill="#d4891a" />
             <ellipse cx="50" cy="40" rx="24" ry="22" fill="#e8a020" />
@@ -83,8 +82,48 @@ export function ConnectionsScreen() {
           </div>
         </div>
 
-        {/* Connections list — fills remaining height */}
-        <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
+        {/* Footer */}
+        <div className="border-t px-1.5 py-2 space-y-0.5">
+          <button className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <HardDrive className="h-3 w-3 shrink-0" />
+            Backup database...
+          </button>
+          <button className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <RotateCcw className="h-3 w-3 shrink-0" />
+            Restore database...
+          </button>
+          <button
+            onClick={() => setDialogOpen(true)}
+            className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3 w-3 shrink-0" />
+            Create connection...
+          </button>
+        </div>
+      </div>
+
+      {/* RIGHT: searchbar + connections list below */}
+      <div className="flex flex-col flex-1 overflow-hidden">
+        {/* Search bar */}
+        <div className="flex items-center h-8 border-b shrink-0 px-2 gap-1">
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <input
+            placeholder="Search for connections..."
+            className="flex-1 h-full text-xs bg-transparent outline-none placeholder:text-muted-foreground"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Connections list — full width, under searchbar */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {connectError && (
+            <div className="mb-2 px-2 py-1.5 rounded bg-destructive/10 border border-destructive/20">
+              <p className="text-[10px] text-destructive">{connectError}</p>
+              <button onClick={() => setConnectError(null)} className="text-[10px] underline text-muted-foreground">Dismiss</button>
+            </div>
+          )}
           {filtered.map((conn) => {
             const isConn = connectedIds.has(conn.id);
             const isLoading = connecting === conn.id;
@@ -131,50 +170,6 @@ export function ConnectionsScreen() {
             </p>
           )}
         </div>
-
-        {/* Error */}
-        {connectError && (
-          <div className="mx-2 mb-1 px-2 py-1.5 rounded bg-destructive/10 border border-destructive/20">
-            <p className="text-[10px] text-destructive">{connectError}</p>
-            <button onClick={() => setConnectError(null)} className="text-[10px] underline text-muted-foreground">Dismiss</button>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="border-t px-1.5 py-2 space-y-0.5">
-          <button className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-            <HardDrive className="h-3 w-3 shrink-0" />
-            Backup database...
-          </button>
-          <button className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-            <RotateCcw className="h-3 w-3 shrink-0" />
-            Restore database...
-          </button>
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Plus className="h-3 w-3 shrink-0" />
-            Create connection...
-          </button>
-        </div>
-      </div>
-
-      {/* RIGHT: searchbar on top + empty zone */}
-      <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Search top bar */}
-        <div className="flex items-center h-8 border-b shrink-0 px-2 gap-1">
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <input
-            placeholder="Search for connections..."
-            className="flex-1 h-full text-xs bg-transparent outline-none placeholder:text-muted-foreground"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        {/* Empty zone */}
-        <div className="flex-1 bg-muted/10" />
       </div>
 
       <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />

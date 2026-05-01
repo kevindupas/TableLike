@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import type { FeatureCollection } from "geojson";
 import { SqlEditor } from "./SqlEditor";
 import { DataGrid, QueryResult } from "./DataGrid";
+import { MapDrawer } from "./MapDrawer";
 
 interface Props {
   connectionId: string;
@@ -17,6 +19,8 @@ export function MainPanel({ connectionId, initialTable }: Props) {
   const [result, setResult] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [mapGeoJson, setMapGeoJson] = useState<FeatureCollection | null>(null);
 
   // Update SQL when table changes
   useEffect(() => {
@@ -28,6 +32,28 @@ export function MainPanel({ connectionId, initialTable }: Props) {
       setError(null);
     }
   }, [initialTable?.schema, initialTable?.name]);
+
+  function handleShowMap(geoColIndex: number) {
+    if (!result) return;
+
+    const features = result.rows
+      .map((row) => {
+        const cell = row[geoColIndex];
+        if (!cell || cell.type !== "Geo" || !cell.value) return null;
+        return {
+          type: "Feature" as const,
+          geometry: cell.value as unknown as GeoJSON.Geometry,
+          properties: {},
+        };
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null);
+
+    setMapGeoJson({
+      type: "FeatureCollection",
+      features,
+    });
+    setMapOpen(true);
+  }
 
   const runQuery = useCallback(async () => {
     if (!sql.trim()) return;
@@ -81,8 +107,15 @@ export function MainPanel({ connectionId, initialTable }: Props) {
           Running query...
         </div>
       ) : (
-        <DataGrid result={result} />
+        <DataGrid result={result} onShowMap={handleShowMap} />
       )}
+
+      <MapDrawer
+        open={mapOpen}
+        onClose={() => setMapOpen(false)}
+        geojson={mapGeoJson}
+        title={initialTable ? `${initialTable.schema}.${initialTable.name}` : "Map View"}
+      />
     </div>
   );
 }

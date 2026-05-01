@@ -97,19 +97,19 @@ export function ConnectionsScreen() {
 
         {/* Footer */}
         <div className="px-2 py-2 space-y-1">
-          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
-            <HardDrive className="h-3 w-3 shrink-0" />
+          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
+            <HardDrive className="h-3.5 w-3.5 shrink-0" />
             Backup database...
           </button>
-          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
-            <RotateCcw className="h-3 w-3 shrink-0" />
+          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
+            <RotateCcw className="h-3.5 w-3.5 shrink-0" />
             Restore database...
           </button>
           <button
             onClick={() => setDialogOpen(true)}
-            className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors"
+            className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors"
           >
-            <Plus className="h-3 w-3 shrink-0" />
+            <Plus className="h-3.5 w-3.5 shrink-0" />
             Create connection...
           </button>
         </div>

@@ -85,18 +85,18 @@ export function ConnectionsScreen() {
         </div>
 
         {/* Footer */}
-        <div className="px-1.5 py-2 space-y-0.5">
-          <button className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+        <div className="px-2 py-2 space-y-1">
+          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[11px] text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
             <HardDrive className="h-3 w-3 shrink-0" />
             Backup database...
           </button>
-          <button className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[11px] text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
             <RotateCcw className="h-3 w-3 shrink-0" />
             Restore database...
           </button>
           <button
             onClick={() => setDialogOpen(true)}
-            className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md text-[11px] text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors"
           >
             <Plus className="h-3 w-3 shrink-0" />
             Create connection...

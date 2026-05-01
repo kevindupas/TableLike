@@ -19,6 +19,7 @@ function App() {
     if (!conn) return;
 
     getPassword(conn.id)
+      .catch(() => "")
       .then((password) =>
         connectDb({
           id: conn.id,
@@ -34,7 +35,7 @@ function App() {
       )
       .then(() => setConnected(conn.id, true))
       .catch(() => {
-        // Password not found or connection failed — stay disconnected silently
+        // Connection failed — stay disconnected silently
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -78,7 +78,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
         color: form.color,
       });
 
-      await savePassword(id, form.password);
+      if (form.password) await savePassword(id, form.password);
 
       // Only add to store after successful connection
       addConnection({

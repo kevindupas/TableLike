@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import { useConnectionStore } from "./store/connections";
 import { connectDb, getPassword } from "./lib/tauri-commands";
-
-function ConnectionsScreen() {
-  return <div className="h-screen bg-background text-foreground flex items-center justify-center text-muted-foreground text-sm">Connections (placeholder)</div>;
-}
+import { ConnectionsScreen } from "./components/ConnectionsScreen";
 
 function DatabaseScreen() {
   return <div className="h-screen bg-background text-foreground flex items-center justify-center text-muted-foreground text-sm">Database (placeholder)</div>;

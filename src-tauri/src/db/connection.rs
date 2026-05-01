@@ -96,4 +96,38 @@ impl ConnectionManager {
             None => Err(format!("Connection '{}' not found", connection_id)),
         }
     }
+
+    pub fn get_pg_pool(&self, id: &str) -> Option<sqlx::PgPool> {
+        let guard = self.pools.lock().unwrap_or_else(|e| e.into_inner());
+        match guard.get(id) {
+            Some(DbPool::Postgres(pool)) => Some(pool.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_mysql_pool(&self, id: &str) -> Option<sqlx::MySqlPool> {
+        let guard = self.pools.lock().unwrap_or_else(|e| e.into_inner());
+        match guard.get(id) {
+            Some(DbPool::MySql(pool)) => Some(pool.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_sqlite_pool(&self, id: &str) -> Option<sqlx::SqlitePool> {
+        let guard = self.pools.lock().unwrap_or_else(|e| e.into_inner());
+        match guard.get(id) {
+            Some(DbPool::Sqlite(pool)) => Some(pool.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_db_type(&self, id: &str) -> Option<String> {
+        let guard = self.pools.lock().unwrap_or_else(|e| e.into_inner());
+        match guard.get(id) {
+            Some(DbPool::Postgres(_)) => Some("postgresql".to_string()),
+            Some(DbPool::MySql(_)) => Some("mysql".to_string()),
+            Some(DbPool::Sqlite(_)) => Some("sqlite".to_string()),
+            None => None,
+        }
+    }
 }

@@ -12,6 +12,8 @@ pub fn run() {
             commands::connect_db,
             commands::disconnect_db,
             commands::check_connection,
+            commands::get_tables,
+            commands::execute_query,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

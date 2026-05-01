@@ -37,7 +37,7 @@ function App() {
       )
       .then(() => setConnected(conn.id, true))
       .catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // run once on mount; read store state via getState() to avoid stale closure
 
   return isConnected ? <DatabaseScreen /> : <ConnectionsScreen />;
 }

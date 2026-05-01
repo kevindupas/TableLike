@@ -9,7 +9,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { DbType, useConnectionStore } from "../store/connections";
-import { connectDb } from "../lib/tauri-commands";
+import { connectDb, savePassword } from "../lib/tauri-commands";
 
 const DB_OPTIONS: { type: DbType; label: string; color: string }[] = [
   { type: "postgresql", label: "PostgreSQL", color: "#336791" },
@@ -77,6 +77,8 @@ export function NewConnectionDialog({ open, onClose }: Props) {
         password: form.password,
         color: form.color,
       });
+
+      await savePassword(id, form.password);
 
       // Only add to store after successful connection
       addConnection({

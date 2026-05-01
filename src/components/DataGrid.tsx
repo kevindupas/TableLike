@@ -13,10 +13,17 @@ export interface QueryColumn {
   is_geo: boolean;
 }
 
-export interface CellValue {
-  type: "Text" | "Number" | "Bool" | "Geo" | "Null";
-  value?: string | number | boolean | object;
+export interface GeoValue {
+  geojson: object;
+  wkt: string | null;
 }
+
+export type CellValue =
+  | { type: "Text"; value: string }
+  | { type: "Number"; value: number }
+  | { type: "Bool"; value: boolean }
+  | { type: "Geo"; value: GeoValue }
+  | { type: "Null" };
 
 export interface QueryResult {
   columns: QueryColumn[];
@@ -28,6 +35,9 @@ export interface QueryResult {
 interface Props {
   result: QueryResult | null;
   onShowMap?: (geoColumnIndex: number) => void;
+  selectedRowIndex?: number | null;
+  onRowSelect?: (rowIndex: number) => void;
+  onContextMenu?: (e: React.MouseEvent, rowIndex: number) => void;
 }
 
 function renderCell(cell: CellValue): ReactNode {
@@ -35,7 +45,11 @@ function renderCell(cell: CellValue): ReactNode {
     return <span className="text-muted-foreground/50 italic text-xs">NULL</span>;
   }
   if (cell.type === "Geo") {
-    return <span className="text-blue-500 text-xs font-mono">geometry</span>;
+    const wkt = cell.value.wkt;
+    const display = wkt
+      ? wkt.length > 60 ? wkt.slice(0, 60) + "…" : wkt
+      : "geometry";
+    return <span className="text-blue-500 text-xs font-mono truncate block max-w-xs" title={wkt ?? "geometry"}>{display}</span>;
   }
   if (cell.type === "Bool") {
     return (
@@ -52,7 +66,7 @@ function renderCell(cell: CellValue): ReactNode {
   );
 }
 
-export function DataGrid({ result, onShowMap }: Props) {
+export function DataGrid({ result, onShowMap, selectedRowIndex, onRowSelect, onContextMenu }: Props) {
   const columns: ColumnDef<CellValue[], unknown>[] = (result?.columns ?? []).map(
     (col, i) => ({
       id: `col-${i}`,
@@ -90,7 +104,7 @@ export function DataGrid({ result, onShowMap }: Props) {
   if (result.columns.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-        Query returned no results
+        No columns returned
       </div>
     );
   }
@@ -144,7 +158,13 @@ export function DataGrid({ result, onShowMap }: Props) {
             {table.getRowModel().rows.map((row, rowIdx) => (
               <tr
                 key={row.id}
-                className="hover:bg-muted/20 border-b last:border-b-0"
+                onClick={() => onRowSelect?.(rowIdx)}
+                onContextMenu={(e) => onContextMenu?.(e, rowIdx)}
+                className={`border-b last:border-b-0 cursor-pointer transition-colors ${
+                  rowIdx === selectedRowIndex
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-muted/20"
+                }`}
               >
                 <td className="w-8 px-2 py-1 text-xs text-muted-foreground/50 select-none">
                   {rowIdx + 1}

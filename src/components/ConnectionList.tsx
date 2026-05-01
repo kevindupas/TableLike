@@ -7,7 +7,7 @@ import { useConnectionStore } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
 
 export function ConnectionList() {
-  const { connections, activeConnectionId, setActiveConnection } =
+  const { connections, activeConnectionId, connectedIds, setActiveConnection } =
     useConnectionStore();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -36,6 +36,7 @@ export function ConnectionList() {
             key={conn.id}
             connection={conn}
             isActive={conn.id === activeConnectionId}
+            isConnected={connectedIds.has(conn.id)}
             onClick={() => setActiveConnection(conn.id)}
           />
         ))}

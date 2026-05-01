@@ -9,10 +9,11 @@ const DB_LABELS: Record<string, string> = {
 interface Props {
   connection: Connection;
   isActive: boolean;
+  isConnected?: boolean;
   onClick: () => void;
 }
 
-export function ConnectionItem({ connection, isActive, onClick }: Props) {
+export function ConnectionItem({ connection, isActive, isConnected, onClick }: Props) {
   return (
     <button
       onClick={onClick}
@@ -22,11 +23,16 @@ export function ConnectionItem({ connection, isActive, onClick }: Props) {
           : "hover:bg-muted text-muted-foreground hover:text-foreground"
       }`}
     >
-      <div
-        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-        style={{ backgroundColor: connection.color }}
-      >
-        {DB_LABELS[connection.type]}
+      <div className="relative w-8 h-8 shrink-0">
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+          style={{ backgroundColor: connection.color }}
+        >
+          {DB_LABELS[connection.type]}
+        </div>
+        {isConnected && (
+          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-background" />
+        )}
       </div>
       <div className="min-w-0">
         <div className="font-medium text-sm truncate">{connection.name}</div>

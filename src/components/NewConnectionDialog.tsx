@@ -9,6 +9,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { DbType, useConnectionStore } from "../store/connections";
+import { connectDb } from "../lib/tauri-commands";
 
 const DB_OPTIONS: { type: DbType; label: string; color: string }[] = [
   { type: "postgresql", label: "PostgreSQL", color: "#336791" },
@@ -42,7 +43,12 @@ export function NewConnectionDialog({ open, onClose }: Props) {
     password: "",
     color: STATUS_COLORS[0],
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const addConnection = useConnectionStore((s) => s.addConnection);
+  const setConnected = useConnectionStore((s) => s.setConnected);
+  const setActiveConnection = useConnectionStore((s) => s.setActiveConnection);
 
   function handleTypeSelect(type: DbType) {
     setDbType(type);
@@ -53,24 +59,53 @@ export function NewConnectionDialog({ open, onClose }: Props) {
     setStep("configure");
   }
 
-  function handleSave() {
-    addConnection({
-      id: crypto.randomUUID(),
-      name: form.name.trim() || `${dbType} connection`,
-      type: dbType,
-      host: form.host,
-      port: parseInt(form.port) || 0,
-      database: form.database,
-      username: form.username,
-      color: form.color,
-    });
-    handleClose();
+  async function handleSave() {
+    setLoading(true);
+    setError(null);
+
+    const id = crypto.randomUUID();
+
+    try {
+      await connectDb({
+        id,
+        name: form.name.trim() || `${dbType} connection`,
+        db_type: dbType,
+        host: form.host,
+        port: parseInt(form.port) || 0,
+        database: form.database,
+        username: form.username,
+        password: form.password,
+        color: form.color,
+      });
+
+      // Only add to store after successful connection
+      addConnection({
+        id,
+        name: form.name.trim() || `${dbType} connection`,
+        type: dbType,
+        host: form.host,
+        port: parseInt(form.port) || 0,
+        database: form.database,
+        username: form.username,
+        color: form.color,
+      });
+
+      setConnected(id, true);
+      setActiveConnection(id);
+      handleClose();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleClose() {
+    if (loading) return;
     onClose();
     setTimeout(() => {
       setStep("pick-type");
+      setError(null);
       setForm({
         name: "",
         host: "127.0.0.1",
@@ -124,6 +159,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="My Database"
+                  disabled={loading}
                 />
               </div>
 
@@ -135,6 +171,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                       key={c}
                       aria-label={`Select color ${c}`}
                       onClick={() => setForm({ ...form, color: c })}
+                      disabled={loading}
                       className={`w-8 h-8 rounded border-2 transition-all ${
                         form.color === c
                           ? "border-foreground scale-110"
@@ -154,6 +191,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                       <Input
                         id="conn-host"
                         value={form.host}
+                        disabled={loading}
                         onChange={(e) =>
                           setForm({ ...form, host: e.target.value })
                         }
@@ -164,6 +202,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                       <Input
                         id="conn-port"
                         value={form.port}
+                        disabled={loading}
                         onChange={(e) =>
                           setForm({ ...form, port: e.target.value })
                         }
@@ -175,6 +214,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                     <Input
                       id="conn-user"
                       value={form.username}
+                      disabled={loading}
                       onChange={(e) =>
                         setForm({ ...form, username: e.target.value })
                       }
@@ -186,6 +226,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                       id="conn-password"
                       type="password"
                       value={form.password}
+                      disabled={loading}
                       onChange={(e) =>
                         setForm({ ...form, password: e.target.value })
                       }
@@ -196,6 +237,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                     <Input
                       id="conn-database"
                       value={form.database}
+                      disabled={loading}
                       onChange={(e) =>
                         setForm({ ...form, database: e.target.value })
                       }
@@ -208,6 +250,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                   <Input
                     id="conn-file"
                     value={form.database}
+                    disabled={loading}
                     onChange={(e) =>
                       setForm({ ...form, database: e.target.value })
                     }
@@ -215,17 +258,29 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                   />
                 </div>
               )}
+
+              {error && (
+                <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep("pick-type")}>
+              <Button
+                variant="outline"
+                onClick={() => setStep("pick-type")}
+                disabled={loading}
+              >
                 Back
               </Button>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleClose}>
+                <Button variant="outline" onClick={handleClose} disabled={loading}>
                   Cancel
                 </Button>
-                <Button onClick={handleSave}>Save</Button>
+                <Button onClick={handleSave} disabled={loading}>
+                  {loading ? "Connecting..." : "Save"}
+                </Button>
               </div>
             </div>
           </>

@@ -44,6 +44,8 @@ export const useConnectionStore = create<ConnectionStore>()((set) => ({
         connections: state.connections.filter((c) => c.id !== id),
         activeConnectionId:
           state.activeConnectionId === id ? null : state.activeConnectionId,
+        activeTable:
+          state.activeConnectionId === id ? null : state.activeTable,
         connectedIds,
       };
     });

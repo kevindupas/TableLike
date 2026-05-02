@@ -186,7 +186,11 @@ pub fn save_password(connection_id: String, password: String) -> Result<(), Stri
 pub fn get_password(connection_id: String) -> Result<String, String> {
     let entry = keyring::Entry::new("tablelike", &connection_id)
         .map_err(|e| e.to_string())?;
-    entry.get_password().map_err(|e| e.to_string())
+    match entry.get_password() {
+        Ok(p) => Ok(p),
+        Err(keyring::Error::NoEntry) => Ok(String::new()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -194,4 +198,27 @@ pub fn delete_password(connection_id: String) -> Result<(), String> {
     let entry = keyring::Entry::new("tablelike", &connection_id)
         .map_err(|e| e.to_string())?;
     entry.delete_credential().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn test_ssh_connection(config: crate::db::types::ConnectionConfig) -> Result<(), String> {
+    let backend = config.ssh_backend.as_deref().unwrap_or("russh");
+    if backend == "openssh" {
+        crate::db::ssh_tunnel::OpenSshTunnel::test_auth(&config).await
+    } else {
+        crate::db::ssh_tunnel::SshTunnel::test_auth(&config).await
+    }
+}
+
+#[tauri::command]
+pub fn detect_ssh_keys() -> Vec<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let candidates = [
+        "id_ed25519", "id_rsa", "id_ecdsa", "id_dsa",
+    ];
+    candidates
+        .iter()
+        .map(|name| format!("{}/.ssh/{}", home, name))
+        .filter(|path| std::path::Path::new(path).exists())
+        .collect()
 }

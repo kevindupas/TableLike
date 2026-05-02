@@ -11,7 +11,6 @@ import {
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
-  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -19,7 +18,6 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { useConnectionStore, Connection, ConnectionGroup, SortBy } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
 import { EditConnectionDialog } from "./EditConnectionDialog";
@@ -66,7 +64,7 @@ function ConnRow({
   const style = dragOverlay
     ? {}
     : {
-        transform: CSS.Transform.toString(transform),
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         transition,
         opacity: isDragging ? 0.3 : 1,
       };
@@ -198,10 +196,8 @@ function SortableGroup({
     isDragging,
   } = useSortable({ id: group.id });
 
-  const { setNodeRef: dropRef, isOver: isDropOver } = useDroppable({ id: `group-drop-${group.id}` });
-
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0.3 : 1,
   };
@@ -210,17 +206,15 @@ function SortableGroup({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div ref={dropRef}>
-        <GroupHeader
+      <GroupHeader
           group={group}
           count={children.length}
-          isOver={isOverGroup || isDropOver}
+          isOver={isOverGroup}
           collapsed={group.collapsed}
           onToggle={onToggle}
           onContextMenu={(e) => { e.preventDefault(); onGroupContextMenu(e, group); }}
           dragHandleProps={{ ...attributes, ...listeners }}
         />
-      </div>
 
       {!group.collapsed && (
         <SortableContext items={childIds} strategy={verticalListSortingStrategy}>
@@ -343,16 +337,21 @@ export function ConnectionsScreen() {
   }, []);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
-    const { over } = event;
+    const { active, over } = event;
     if (!over) { setDragOverGroupId(null); return; }
+    const activeId = String(active.id);
     const overId = String(over.id);
-    // Check if over a group drop zone
-    if (overId.startsWith("group-drop-")) {
-      setDragOverGroupId(overId.replace("group-drop-", ""));
+    const draggedConn = connMap.get(activeId);
+    if (!draggedConn) { setDragOverGroupId(null); return; }
+    // Hovering over a group header → highlight it
+    if (groupMap.has(overId)) {
+      setDragOverGroupId(overId);
+    // Hovering over a child conn inside a group → highlight that group
     } else {
-      setDragOverGroupId(null);
+      const overConn = connMap.get(overId);
+      setDragOverGroupId(overConn?.groupId ?? null);
     }
-  }, []);
+  }, [connMap, groupMap]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -362,52 +361,59 @@ export function ConnectionsScreen() {
 
     const activeId = String(active.id);
     const overId = String(over.id);
-
-    // Drop on group drop zone → move connection into group
-    if (overId.startsWith("group-drop-")) {
-      const targetGroupId = overId.replace("group-drop-", "");
-      const draggedConn = connMap.get(activeId);
-      if (draggedConn && draggedConn.groupId !== targetGroupId) {
-        moveConnectionToGroup(activeId, targetGroupId);
-      }
-      return;
-    }
-
-    // Drop within group children → reorder within group
     const draggedConn = connMap.get(activeId);
     const overConn = connMap.get(overId);
-    if (draggedConn && overConn && draggedConn.groupId && draggedConn.groupId === overConn.groupId) {
-      const groupId = draggedConn.groupId;
-      const groupChildren = connections.filter((c) => c.groupId === groupId);
-      const oldIdx = groupChildren.findIndex((c) => c.id === activeId);
-      const newIdx = groupChildren.findIndex((c) => c.id === overId);
-      if (oldIdx !== -1 && newIdx !== -1) {
-        reorderGroupChildren(groupId, arrayMove(groupChildren, oldIdx, newIdx).map((c) => c.id));
-      }
-      return;
-    }
+    const overGroup = groupMap.get(overId);
 
-    // Drop connection onto ungrouped area (over another ungrouped conn or group) → remove from group
-    if (draggedConn && draggedConn.groupId) {
-      // Over a top-level item (ungrouped conn or group header) → move out of group
-      if (topLevelIds.includes(overId) && overId !== activeId) {
+    // Dragging a connection
+    if (draggedConn) {
+      // Drop ON a group header → move into that group
+      if (overGroup) {
+        if (draggedConn.groupId !== overGroup.id) {
+          moveConnectionToGroup(activeId, overGroup.id);
+        }
+        return;
+      }
+
+      // Drop ON a sibling inside same group → reorder within group
+      if (overConn && draggedConn.groupId && draggedConn.groupId === overConn.groupId) {
+        const groupId = draggedConn.groupId;
+        const groupChildren = connections.filter((c) => c.groupId === groupId);
+        const oldIdx = groupChildren.findIndex((c) => c.id === activeId);
+        const newIdx = groupChildren.findIndex((c) => c.id === overId);
+        if (oldIdx !== -1 && newIdx !== -1 && oldIdx !== newIdx) {
+          reorderGroupChildren(groupId, arrayMove(groupChildren, oldIdx, newIdx).map((c) => c.id));
+        }
+        return;
+      }
+
+      // Drop ON a top-level item (ungrouped conn or group) while dragged item is inside a group → exit group
+      if (draggedConn.groupId && topLevelIds.includes(overId)) {
         moveConnectionToGroup(activeId, undefined);
-        // Then reorder
-        const newTopLevel = [...topLevelIds.filter((id) => id !== activeId)];
-        const overIdx = newTopLevel.indexOf(overId);
-        newTopLevel.splice(overIdx, 0, activeId);
-        reorder(newTopLevel);
+        const newTopLevel = [...topLevelIds, activeId];
+        const withoutActive = newTopLevel.filter((id) => id !== activeId);
+        const overIdx = withoutActive.indexOf(overId);
+        withoutActive.splice(overIdx + 1, 0, activeId);
+        reorder(withoutActive);
+        return;
+      }
+
+      // Reorder top-level ungrouped connections
+      if (!draggedConn.groupId && topLevelIds.includes(activeId) && topLevelIds.includes(overId) && activeId !== overId) {
+        const oldIdx = topLevelIds.indexOf(activeId);
+        const newIdx = topLevelIds.indexOf(overId);
+        reorder(arrayMove(topLevelIds, oldIdx, newIdx));
       }
       return;
     }
 
-    // Reorder top-level items
-    if (topLevelIds.includes(activeId) && topLevelIds.includes(overId) && activeId !== overId) {
+    // Dragging a group → reorder top-level
+    if (groupMap.has(activeId) && topLevelIds.includes(overId) && activeId !== overId) {
       const oldIdx = topLevelIds.indexOf(activeId);
       const newIdx = topLevelIds.indexOf(overId);
       reorder(arrayMove(topLevelIds, oldIdx, newIdx));
     }
-  }, [connMap, topLevelIds, connections, moveConnectionToGroup, reorder, reorderGroupChildren]);
+  }, [connMap, groupMap, topLevelIds, connections, moveConnectionToGroup, reorder, reorderGroupChildren]);
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden relative">

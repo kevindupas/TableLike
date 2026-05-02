@@ -7,7 +7,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  closestCenter,
+  pointerWithin,
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
@@ -140,7 +140,7 @@ function GroupHeader({
     <div
       ref={dragRef}
       style={dragStyle}
-      className={`flex items-center gap-1.5 w-full px-2 py-1 rounded transition-colors ${
+      className={`flex items-center gap-1.5 w-full px-4 py-2.5 rounded transition-colors ${
         isOver ? "bg-blue-500/20 ring-1 ring-blue-500" : "hover:bg-muted/40"
       }`}
       onContextMenu={onContextMenu}
@@ -357,7 +357,15 @@ export function ConnectionsScreen() {
     const { active, over } = event;
     setActiveId(null);
     setDragOverGroupId(null);
-    if (!over) return;
+
+    // Drop on empty space → exit group (ungrouped)
+    if (!over) {
+      const draggedConn = connMap.get(String(active.id));
+      if (draggedConn?.groupId) {
+        moveConnectionToGroup(String(active.id), undefined);
+      }
+      return;
+    }
 
     const activeId = String(active.id);
     const overId = String(over.id);
@@ -471,7 +479,7 @@ export function ConnectionsScreen() {
 
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}

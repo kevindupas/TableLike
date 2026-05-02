@@ -12,8 +12,9 @@ import {
   Upload,
   Trash2,
   ChevronRight,
+  Check,
 } from "lucide-react";
-import { Connection } from "../store/connections";
+import { Connection, SortBy } from "../store/connections";
 
 interface Props {
   conn: Connection;
@@ -25,6 +26,13 @@ interface Props {
   onDuplicate: () => void;
   onDelete: () => void;
   onNewConnection: () => void;
+  onNewGroup: () => void;
+  onSortBy: (s: SortBy) => void;
+  currentSort: SortBy;
+  onImport: () => void;
+  onExportAll: () => void;
+  onExportGroup: () => void;
+  onExportSingle: () => void;
 }
 
 interface MenuItem {
@@ -54,6 +62,13 @@ export function ConnectionContextMenu({
   onDuplicate,
   onDelete,
   onNewConnection,
+  onNewGroup,
+  onSortBy,
+  currentSort,
+  onImport,
+  onExportAll,
+  onExportGroup,
+  onExportSingle,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
@@ -114,7 +129,7 @@ export function ConnectionContextMenu({
         {
           label: "Group",
           icon: <FolderPlus className="h-3.5 w-3.5" />,
-          disabled: true,
+          action: () => { onNewGroup(); onClose(); },
         },
         {
           label: "Connection from URL",
@@ -143,24 +158,46 @@ export function ConnectionContextMenu({
       label: "Sort By",
       icon: <ArrowUpDown className="h-3.5 w-3.5" />,
       submenu: [
-        { label: "Tag", disabled: true },
-        { label: "Name", disabled: true },
-        { label: "Driver", disabled: true },
+        {
+          label: "Name",
+          icon: currentSort === "name" ? <Check className="h-3.5 w-3.5" /> : undefined,
+          action: () => { onSortBy(currentSort === "name" ? "none" : "name"); onClose(); },
+        },
+        {
+          label: "Driver",
+          icon: currentSort === "driver" ? <Check className="h-3.5 w-3.5" /> : undefined,
+          action: () => { onSortBy(currentSort === "driver" ? "none" : "driver"); onClose(); },
+        },
+        {
+          label: "Tag",
+          icon: currentSort === "tag" ? <Check className="h-3.5 w-3.5" /> : undefined,
+          action: () => { onSortBy(currentSort === "tag" ? "none" : "tag"); onClose(); },
+        },
       ],
     },
     { separator: true, label: "" },
     {
       label: "Import Connection",
       icon: <Upload className="h-3.5 w-3.5" />,
-      disabled: true,
+      action: () => { onImport(); onClose(); },
     },
     {
       label: "Export Connection",
       icon: <Download className="h-3.5 w-3.5" />,
       submenu: [
-        { label: "Export All", disabled: true },
-        { label: "Export this group", disabled: true },
-        { label: "Export this connection", disabled: true },
+        {
+          label: "Export All",
+          action: () => { onExportAll(); onClose(); },
+        },
+        {
+          label: "Export this group",
+          action: () => { onExportGroup(); onClose(); },
+          disabled: !conn.groupId,
+        },
+        {
+          label: "Export this connection",
+          action: () => { onExportSingle(); onClose(); },
+        },
       ],
     },
     { separator: true, label: "" },
@@ -192,9 +229,7 @@ export function ConnectionContextMenu({
               onMouseEnter={() => setOpenSubmenu(item.label)}
               onMouseLeave={() => setOpenSubmenu(null)}
             >
-              <button
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground transition-colors"
-              >
+              <button className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground transition-colors">
                 {item.icon && <span className="text-muted-foreground">{item.icon}</span>}
                 <span className="flex-1">{item.label}</span>
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
@@ -205,10 +240,13 @@ export function ConnectionContextMenu({
                     <button
                       key={sub.label}
                       disabled={sub.disabled}
-                      onClick={() => { sub.action?.(); onClose(); }}
+                      onClick={() => { sub.action?.(); }}
                       className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {sub.icon && <span className="text-muted-foreground">{sub.icon}</span>}
+                      {sub.icon
+                        ? <span className="text-muted-foreground">{sub.icon}</span>
+                        : <span className="w-3.5" />
+                      }
                       {sub.label}
                     </button>
                   ))}

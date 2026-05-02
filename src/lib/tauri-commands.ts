@@ -35,3 +35,18 @@ export async function getPassword(connectionId: string): Promise<string> {
 export async function deletePassword(connectionId: string): Promise<void> {
   return invoke<void>("delete_password", { connectionId });
 }
+
+export async function exportConnections(
+  payload: unknown,
+  password: string,
+  path: string,
+): Promise<void> {
+  return invoke<void>("export_connections", { payload, password, path });
+}
+
+export async function importConnections(
+  path: string,
+  password: string,
+): Promise<unknown> {
+  return invoke<unknown>("import_connections", { path, password });
+}

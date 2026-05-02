@@ -4,6 +4,57 @@ use crate::db::types::{ConnectionConfig, QueryResult};
 use crate::db::schema;
 use crate::db::query;
 
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
+use rand::RngCore;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+pub struct ExportConnection {
+    pub id: String,
+    pub name: String,
+    pub db_type: String,
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub username: String,
+    pub color: String,
+    pub group_id: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ExportGroup {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ExportPayload {
+    pub version: u8,
+    pub connections: Vec<ExportConnection>,
+    pub groups: Vec<ExportGroup>,
+}
+
+fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(password.as_bytes());
+    hasher.update(salt);
+    // stretch with 10k rounds
+    let mut key: [u8; 32] = hasher.finalize().into();
+    for _ in 0..9_999 {
+        let mut h = Sha256::new();
+        h.update(&key);
+        h.update(salt);
+        key = h.finalize().into();
+    }
+    key
+}
+
 #[tauri::command]
 pub async fn connect_db(
     config: ConnectionConfig,
@@ -99,6 +150,58 @@ pub async fn execute_query(
         }
         _ => Err("DB type not yet supported for queries".to_string()),
     }
+}
+
+/// Encrypts payload JSON with AES-256-GCM using a password-derived key.
+/// Output format: [16 salt][12 nonce][ciphertext]
+#[tauri::command]
+pub fn export_connections(
+    payload: serde_json::Value,
+    password: String,
+    path: String,
+) -> Result<(), String> {
+    let json = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+
+    let mut salt = [0u8; 16];
+    rand::thread_rng().fill_bytes(&mut salt);
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+
+    let key = derive_key(&password, &salt);
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher.encrypt(nonce, json.as_ref()).map_err(|e| e.to_string())?;
+
+    let mut out = Vec::with_capacity(16 + 12 + ciphertext.len());
+    out.extend_from_slice(&salt);
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+
+    std::fs::write(&path, &out).map_err(|e| e.to_string())
+}
+
+/// Decrypts a .tlexport file. Returns the JSON payload.
+#[tauri::command]
+pub fn import_connections(
+    path: String,
+    password: String,
+) -> Result<serde_json::Value, String> {
+    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    if data.len() < 28 {
+        return Err("Invalid export file".to_string());
+    }
+    let salt = &data[..16];
+    let nonce_bytes = &data[16..28];
+    let ciphertext = &data[28..];
+
+    let key = derive_key(&password, salt);
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let nonce = Nonce::from_slice(nonce_bytes);
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| "Wrong password or corrupted file".to_string())?;
+
+    serde_json::from_slice(&plaintext).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

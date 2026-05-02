@@ -21,6 +21,11 @@
       "csp": "default-src 'self'; script-src 'self'"
     }
   },
+  "plugins": {
+    "fs": {
+      "scope": ["$DOCUMENT/*", "$DOWNLOAD/*", "$HOME/*"]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

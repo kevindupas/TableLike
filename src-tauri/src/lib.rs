@@ -7,6 +7,8 @@ use db::connection::ConnectionManager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(ConnectionManager::new())
         .invoke_handler(tauri::generate_handler![
             commands::connect_db,
@@ -17,6 +19,8 @@ pub fn run() {
             commands::save_password,
             commands::get_password,
             commands::delete_password,
+            commands::export_connections,
+            commands::import_connections,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

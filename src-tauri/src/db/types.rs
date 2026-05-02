@@ -29,12 +29,18 @@ pub struct ColumnInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoValue {
+    pub geojson: serde_json::Value,
+    pub wkt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum CellValue {
     Text(String),
     Number(f64),
     Bool(bool),
-    Geo(serde_json::Value),
+    Geo(GeoValue),
     Null,
 }
 

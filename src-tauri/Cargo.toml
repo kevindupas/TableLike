@@ -28,4 +28,9 @@ geozero = { version = "0.12", features = ["with-wkb", "with-geojson"] }
 uuid = { version = "1", features = ["v4"] }
 thiserror = "1"
 keyring = "3"
+aes-gcm = "0.10"
+rand = "0.8"
+sha2 = "0.10"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 

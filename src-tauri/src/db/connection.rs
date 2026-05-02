@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use sqlx::{Pool, Postgres, MySql, Sqlite};
-use sqlx::ConnectOptions;
 use crate::db::types::{ConnectionConfig, DbType};
 
 pub enum DbPool {
@@ -84,17 +83,6 @@ impl ConnectionManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .contains_key(connection_id)
-    }
-
-    pub fn with_pool<F, T>(&self, connection_id: &str, f: F) -> Result<T, String>
-    where
-        F: FnOnce(&DbPool) -> Result<T, String>,
-    {
-        let guard = self.pools.lock().unwrap_or_else(|e| e.into_inner());
-        match guard.get(connection_id) {
-            Some(pool) => f(pool),
-            None => Err(format!("Connection '{}' not found", connection_id)),
-        }
     }
 
     pub fn get_pg_pool(&self, id: &str) -> Option<sqlx::PgPool> {

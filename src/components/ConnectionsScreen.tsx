@@ -18,7 +18,7 @@ import {
   UniqueIdentifier,
 } from "@dnd-kit/core";
 import type { CollisionDetection } from "@dnd-kit/core";
-import { useConnectionStore, Connection, ConnectionGroup, SortBy } from "../store/connections";
+import { useConnectionStore, Connection, ConnectionGroup, SortBy, Tag } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
 import { EditConnectionDialog } from "./EditConnectionDialog";
 import { ConnectionContextMenu } from "./ConnectionContextMenu";
@@ -68,6 +68,7 @@ function BetweenZone({ id, active, dragging }: { id: string; active: boolean; dr
 
 interface ConnRowProps {
   conn: Connection;
+  tag?: Tag;
   indent?: boolean;
   isActive: boolean;
   isConn: boolean;
@@ -78,7 +79,7 @@ interface ConnRowProps {
   ghost?: boolean;
 }
 
-function ConnRow({ conn, indent, isActive, isConn, isLoading, onClick, onDoubleClick, onContextMenu, ghost }: ConnRowProps) {
+function ConnRow({ conn, tag, indent, isActive, isConn, isLoading, onClick, onDoubleClick, onContextMenu, ghost }: ConnRowProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: conn.id,
     data: { type: "conn", conn },
@@ -104,9 +105,11 @@ function ConnRow({ conn, indent, isActive, isConn, isLoading, onClick, onDoubleC
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <span className="text-xs font-semibold truncate">{conn.name}</span>
-            <span className="text-[11px] px-1 rounded font-medium shrink-0" style={{ backgroundColor: conn.color + "28", color: conn.color }}>
-              {conn.type === "sqlite" ? "file" : "local"}
-            </span>
+            {tag && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ backgroundColor: tag.color + "28", color: tag.color }}>
+                {tag.name}
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-muted-foreground truncate italic">
             {conn.type === "sqlite" ? conn.database : `${conn.host}:${conn.port}`}
@@ -163,7 +166,7 @@ function GroupRow({ group, count, isOverDrop, collapsed, onToggle, onContextMenu
 
 export function ConnectionsScreen() {
   const {
-    connections, groups, sortBy, order,
+    connections, groups, tags, sortBy, order,
     activeConnectionId, connectedIds,
     setActiveConnection, setConnected,
     removeConnection, removeGroup,
@@ -171,6 +174,8 @@ export function ConnectionsScreen() {
     setSortBy, toggleGroupCollapsed,
     reorder, moveConnectionToGroup, reorderGroupChildren,
   } = useConnectionStore();
+
+  const tagMap = new Map(tags.map((t) => [t.id, t]));
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -204,11 +209,13 @@ export function ConnectionsScreen() {
 
   async function handleConnect(conn: Connection) {
     if (connectedIds.has(conn.id)) { setActiveConnection(conn.id); return; }
+
+    const password = await getPassword(conn.id).catch(() => "");
+
     setConnecting(conn.id);
     setConnectError(null);
     try {
-      const password = await getPassword(conn.id).catch(() => "");
-      const sshPassword = conn.ssh?.authMethod === "password"
+      const sshPassword = conn.ssh?.authMethod === "password" && (conn.ssh.passwordMode ?? "keychain") !== "none"
         ? await getSshPassword(conn.id).catch(() => "")
         : undefined;
       await connectDb({
@@ -230,6 +237,7 @@ export function ConnectionsScreen() {
         ssh_use_password_auth: conn.ssh?.usePasswordAuth,
         ssh_add_legacy_host_key: conn.ssh?.addLegacyHostKeyAlgos,
         ssh_add_legacy_kex: conn.ssh?.addLegacyKexAlgos,
+        ssh_backend: conn.ssh?.backend,
       });
       setConnected(conn.id, true);
       setActiveConnection(conn.id);
@@ -391,6 +399,7 @@ export function ConnectionsScreen() {
             <ConnRow
               key={child.id}
               conn={child}
+              tag={child.tagId ? tagMap.get(child.tagId) : undefined}
               indent
               isActive={child.id === activeConnectionId}
               isConn={connectedIds.has(child.id)}
@@ -411,6 +420,7 @@ export function ConnectionsScreen() {
       <ConnRow
         key={conn.id}
         conn={conn}
+        tag={conn.tagId ? tagMap.get(conn.tagId) : undefined}
         isActive={conn.id === activeConnectionId}
         isConn={connectedIds.has(conn.id)}
         isLoading={connecting === conn.id}
@@ -499,6 +509,8 @@ export function ConnectionsScreen() {
       <EditGroupDialog group={editGroup} onClose={() => setEditGroup(null)} onSave={(id, name, color, icon) => updateGroup(id, { name, color, icon })} />
       <ExportDialog open={exportState.open} scope={exportState.scope} groupId={exportState.groupId} connId={exportState.connId} onClose={() => setExportState({ open: false, scope: "all" })} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+
+
 
       {connCtx && (
         <ConnectionContextMenu

@@ -19,6 +19,7 @@ export interface RustConnectionConfig {
   ssh_use_password_auth?: boolean;
   ssh_add_legacy_kex?: boolean;
   ssh_add_legacy_host_key?: boolean;
+  ssh_backend?: "russh" | "openssh";
 }
 
 export async function connectDb(config: RustConnectionConfig): Promise<string> {
@@ -70,4 +71,12 @@ export async function getSshPassword(connectionId: string): Promise<string> {
 
 export async function deleteSshPassword(connectionId: string): Promise<void> {
   return invoke<void>("delete_password", { connectionId: `ssh-${connectionId}` });
+}
+
+export async function detectSshKeys(): Promise<string[]> {
+  return invoke<string[]>("detect_ssh_keys");
+}
+
+export async function testSshConnection(config: Partial<RustConnectionConfig> & { id: string; name: string; db_type: RustConnectionConfig["db_type"]; host: string; port: number; database: string; username: string; password: string; color: string }): Promise<void> {
+  return invoke<void>("test_ssh_connection", { config });
 }

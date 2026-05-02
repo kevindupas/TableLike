@@ -4,13 +4,29 @@ import { disconnectDb, deletePassword, deleteSshPassword } from "../lib/tauri-co
 
 export type DbType = "postgresql" | "mysql" | "sqlite";
 export type SortBy = "none" | "name" | "driver" | "tag";
+export type PasswordMode = "keychain" | "ask" | "none";
+export type SslMode = "preferred" | "require" | "verify-ca" | "verify-full" | "disable";
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export const DEFAULT_TAGS: Tag[] = [
+  { id: "local",       name: "local",       color: "#22c55e" },
+  { id: "testing",     name: "testing",     color: "#f97316" },
+  { id: "development", name: "development", color: "#10b981" },
+  { id: "staging",     name: "staging",     color: "#3b82f6" },
+  { id: "production",  name: "production",  color: "#ef4444" },
+];
 
 export interface ConnectionGroup {
   id: string;
   name: string;
   color: string;
   collapsed: boolean;
-  icon?: string; // base64 data URL, max 64×64px
+  icon?: string;
 }
 
 export interface SshConfig {
@@ -23,6 +39,8 @@ export interface SshConfig {
   usePasswordAuth: boolean;
   addLegacyKexAlgos: boolean;
   addLegacyHostKeyAlgos: boolean;
+  passwordMode: PasswordMode;
+  backend: "russh" | "openssh";
 }
 
 export interface Connection {
@@ -35,14 +53,24 @@ export interface Connection {
   username: string;
   color: string;
   groupId?: string;
+  tagId?: string;
   ssh?: SshConfig;
+  passwordMode: PasswordMode;
+  sslMode: SslMode;
+  sslKeyPath?: string;
+  sslCertPath?: string;
+  sslCaCertPath?: string;
+  bootstrapSql?: string;
+  bootstrapBash?: string;
+  loadSystemSchemas?: boolean;
+  disableChannelBinding?: boolean;
 }
 
 interface ConnectionStore {
   connections: Connection[];
   groups: ConnectionGroup[];
+  tags: Tag[];
   sortBy: SortBy;
-  // top-level order: group ids and ungrouped connection ids interleaved
   order: string[];
   activeConnectionId: string | null;
   connectedIds: Set<string>;
@@ -59,6 +87,9 @@ interface ConnectionStore {
   reorder: (newOrder: string[]) => void;
   moveConnectionToGroup: (connId: string, groupId: string | undefined) => void;
   reorderGroupChildren: (groupId: string, newOrder: string[]) => void;
+  addTag: (tag: Tag) => void;
+  updateTag: (id: string, patch: Partial<Omit<Tag, "id">>) => void;
+  removeTag: (id: string) => void;
 }
 
 export const useConnectionStore = create<ConnectionStore>()(
@@ -66,6 +97,7 @@ export const useConnectionStore = create<ConnectionStore>()(
     (set) => ({
       connections: [],
       groups: [],
+      tags: [...DEFAULT_TAGS],
       sortBy: "none",
       order: [],
       activeConnectionId: null,
@@ -150,12 +182,22 @@ export const useConnectionStore = create<ConnectionStore>()(
             .filter(Boolean) as Connection[];
           return { connections: [...others, ...inGroup] };
         }),
+      addTag: (tag) =>
+        set((state) => ({ tags: [...state.tags, tag] })),
+      updateTag: (id, patch) =>
+        set((state) => ({ tags: state.tags.map((t) => t.id === id ? { ...t, ...patch } : t) })),
+      removeTag: (id) =>
+        set((state) => ({
+          tags: state.tags.filter((t) => t.id !== id),
+          connections: state.connections.map((c) => c.tagId === id ? { ...c, tagId: undefined } : c),
+        })),
     }),
     {
       name: "tablelike-connections",
       partialize: (state) => ({
         connections: state.connections,
         groups: state.groups,
+        tags: state.tags,
         sortBy: state.sortBy,
         order: state.order,
         activeConnectionId: state.activeConnectionId,

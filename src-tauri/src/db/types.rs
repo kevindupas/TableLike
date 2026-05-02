@@ -20,6 +20,7 @@ pub struct ConnectionConfig {
     pub ssh_use_password_auth: Option<bool>,
     pub ssh_add_legacy_kex: Option<bool>,
     pub ssh_add_legacy_host_key: Option<bool>,
+    pub ssh_backend: Option<String>, // "russh" | "openssh", default russh
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

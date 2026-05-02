@@ -9,35 +9,6 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use rand::RngCore;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize)]
-pub struct ExportConnection {
-    pub id: String,
-    pub name: String,
-    pub db_type: String,
-    pub host: String,
-    pub port: u16,
-    pub database: String,
-    pub username: String,
-    pub color: String,
-    pub group_id: Option<String>,
-    pub password: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ExportGroup {
-    pub id: String,
-    pub name: String,
-    pub color: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ExportPayload {
-    pub version: u8,
-    pub connections: Vec<ExportConnection>,
-    pub groups: Vec<ExportGroup>,
-}
 
 fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
     use sha2::{Digest, Sha256};

@@ -22,9 +22,7 @@
     }
   },
   "plugins": {
-    "fs": {
-      "scope": ["$DOCUMENT/*", "$DOWNLOAD/*", "$HOME/*"]
-    }
+    "fs": {}
   },
   "bundle": {
     "active": true,

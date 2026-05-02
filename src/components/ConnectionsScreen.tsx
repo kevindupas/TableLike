@@ -509,15 +509,15 @@ export function ConnectionsScreen() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onNewGroup={() => setGroupDialogOpen(true)}
-        onImportFile={() => setImportOpen(true)}
-        onImportUrl={() => setImportUrlOpen(true)}
+        onImportFile={() => { setDialogOpen(false); setImportOpen(true); }}
+        onImportUrl={() => { setDialogOpen(false); setImportUrlOpen(true); }}
       />
       <EditConnectionDialog conn={editConn} onClose={() => setEditConn(null)} />
       <CreateGroupDialog open={groupDialogOpen} onClose={() => setGroupDialogOpen(false)} onCreate={(name, color, icon) => addGroup({ id: crypto.randomUUID(), name, color, icon, collapsed: false })} />
       <EditGroupDialog group={editGroup} onClose={() => setEditGroup(null)} onSave={(id, name, color, icon) => updateGroup(id, { name, color, icon })} />
       <ExportDialog open={exportState.open} scope={exportState.scope} groupId={exportState.groupId} connId={exportState.connId} onClose={() => setExportState({ open: false, scope: "all" })} />
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
-      <ImportUrlDialog open={importUrlOpen} onClose={() => setImportUrlOpen(false)} />
+      <ImportDialog open={importOpen} onClose={() => { setImportOpen(false); setDialogOpen(true); }} />
+      <ImportUrlDialog open={importUrlOpen} onClose={() => { setImportUrlOpen(false); setDialogOpen(true); }} />
 
 
 

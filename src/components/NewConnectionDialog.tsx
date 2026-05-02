@@ -679,8 +679,8 @@ export function NewConnectionDialog({ open, onClose, onNewGroup, onImportFile, o
                     className="text-sm text-muted-foreground bg-transparent border-none outline-none cursor-pointer hover:text-foreground transition-colors"
                     value=""
                     onChange={(e) => {
-                      if (e.target.value === "file") { handleClose(); onImportFile?.(); }
-                      if (e.target.value === "url") { handleClose(); onImportUrl?.(); }
+                      if (e.target.value === "file") { onImportFile?.(); }
+                      if (e.target.value === "url") { onImportUrl?.(); }
                       e.target.value = "";
                     }}
                   >

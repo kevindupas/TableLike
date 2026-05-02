@@ -51,11 +51,12 @@ function DropLine() {
 
 // ── Between-zone droppable ───────────────────────────────────────────────────
 
-function BetweenZone({ id, active, dragging }: { id: string; active: boolean; dragging: boolean }) {
+function BetweenZone({ id, active }: { id: string; active: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  const show = isOver || active;
   return (
-    <div ref={setNodeRef} className={dragging ? "h-2 mx-2" : "h-0 mx-2"}>
-      {dragging && (isOver || active) && <DropLine />}
+    <div ref={setNodeRef} className={show ? "h-4 mx-2 flex items-center" : "h-0 overflow-hidden"}>
+      {show && <DropLine />}
     </div>
   );
 }
@@ -333,7 +334,7 @@ export function ConnectionsScreen() {
 
   function renderBZ(afterId: string, groupId?: string) {
     const id = bzId(afterId, groupId);
-    return <BetweenZone key={id} id={id} active={overId === id} dragging={activeId !== null} />;
+    return <BetweenZone key={id} id={id} active={overId === id} />;
   }
 
   // ── Build item list ────────────────────────────────────────────────────────

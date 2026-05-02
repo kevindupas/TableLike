@@ -400,6 +400,14 @@ export function ConnectionsScreen() {
   // ── JSX ────────────────────────────────────────────────────────────────────
 
   return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={customCollision}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => { setActiveId(null); setOverId(null); }}
+    >
     <div className="flex h-screen bg-background text-foreground overflow-hidden relative">
       <div className="absolute inset-0 bg-linear-to-br from-muted/60 via-background to-muted/40 backdrop-blur-3xl pointer-events-none" />
 
@@ -453,43 +461,7 @@ export function ConnectionsScreen() {
             </div>
           )}
 
-          <DndContext
-            sensors={sensors}
-            collisionDetection={customCollision}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-            onDragCancel={() => { setActiveId(null); setOverId(null); }}
-          >
-            {items}
-
-            <DragOverlay dropAnimation={null}>
-              {activeDragConn && (
-                <div className="w-56 opacity-90 shadow-xl rounded ring-1 ring-blue-500/60 bg-background/80 backdrop-blur-sm">
-                  <ConnRow
-                    conn={activeDragConn}
-                    isActive={false}
-                    isConn={connectedIds.has(activeDragConn.id)}
-                    isLoading={false}
-                    onClick={() => {}} onDoubleClick={() => {}} onContextMenu={() => {}}
-                    ghost
-                  />
-                </div>
-              )}
-              {activeDragGroup && (
-                <div className="w-56 opacity-90 shadow-xl rounded ring-1 ring-blue-500/60 bg-background/80 backdrop-blur-sm">
-                  <GroupRow
-                    group={activeDragGroup}
-                    count={connections.filter(c => c.groupId === activeDragGroup.id).length}
-                    isOverDrop={false}
-                    collapsed={activeDragGroup.collapsed}
-                    onToggle={() => {}} onContextMenu={() => {}}
-                    ghost
-                  />
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
+          {items}
 
           {connections.length === 0 && <p className="text-[10px] text-muted-foreground text-center py-6">No connections yet</p>}
         </div>
@@ -533,6 +505,34 @@ export function ConnectionsScreen() {
           onDelete={() => removeGroup(groupCtx.group.id)}
         />
       )}
+
+      <DragOverlay dropAnimation={null}>
+        {activeDragConn && (
+          <div className="w-56 opacity-90 shadow-xl rounded ring-1 ring-blue-500/60 bg-background/80">
+            <ConnRow
+              conn={activeDragConn}
+              isActive={false}
+              isConn={connectedIds.has(activeDragConn.id)}
+              isLoading={false}
+              onClick={() => {}} onDoubleClick={() => {}} onContextMenu={() => {}}
+              ghost
+            />
+          </div>
+        )}
+        {activeDragGroup && (
+          <div className="w-56 opacity-90 shadow-xl rounded ring-1 ring-blue-500/60 bg-background/80">
+            <GroupRow
+              group={activeDragGroup}
+              count={connections.filter(c => c.groupId === activeDragGroup.id).length}
+              isOverDrop={false}
+              collapsed={activeDragGroup.collapsed}
+              onToggle={() => {}} onContextMenu={() => {}}
+              ghost
+            />
+          </div>
+        )}
+      </DragOverlay>
     </div>
+    </DndContext>
   );
 }

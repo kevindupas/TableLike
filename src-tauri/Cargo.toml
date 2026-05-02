@@ -33,4 +33,8 @@ rand = "0.8"
 sha2 = "0.10"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+russh = "0.44"
+russh-keys = "0.44"
+shellexpand = "3"
+async-trait = "0.1"
 

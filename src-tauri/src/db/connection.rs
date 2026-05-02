@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use sqlx::{Pool, Postgres, MySql, Sqlite};
 use crate::db::types::{ConnectionConfig, DbType};
+use crate::db::ssh_tunnel::SshTunnel;
 
 pub enum DbPool {
     Postgres(Pool<Postgres>),
@@ -11,23 +12,40 @@ pub enum DbPool {
 
 pub struct ConnectionManager {
     pools: Mutex<HashMap<String, DbPool>>,
+    tunnels: Mutex<HashMap<String, SshTunnel>>,
 }
 
 impl ConnectionManager {
     pub fn new() -> Self {
         Self {
             pools: Mutex::new(HashMap::new()),
+            tunnels: Mutex::new(HashMap::new()),
         }
     }
 
     pub async fn connect(&self, config: &ConnectionConfig) -> Result<(), String> {
+        // Establish SSH tunnel if configured
+        let (effective_host, effective_port) = if config.ssh_host.is_some() {
+            let tunnel = SshTunnel::connect(config)
+                .await
+                .map_err(|e| format!("SSH tunnel: {e}"))?;
+            let port = tunnel.local_port;
+            self.tunnels
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(config.id.clone(), tunnel);
+            ("127.0.0.1".to_string(), port)
+        } else {
+            (config.host.clone(), config.port)
+        };
+
         // Build pool outside of lock — never hold MutexGuard across await
         let pool = match config.db_type {
             DbType::Postgresql => {
                 use sqlx::postgres::PgConnectOptions;
                 let opts = PgConnectOptions::new()
-                    .host(&config.host)
-                    .port(config.port)
+                    .host(&effective_host)
+                    .port(effective_port)
                     .database(&config.database)
                     .username(&config.username)
                     .password(&config.password);
@@ -41,8 +59,8 @@ impl ConnectionManager {
             DbType::Mysql => {
                 use sqlx::mysql::MySqlConnectOptions;
                 let opts = MySqlConnectOptions::new()
-                    .host(&config.host)
-                    .port(config.port)
+                    .host(&effective_host)
+                    .port(effective_port)
                     .database(&config.database)
                     .username(&config.username)
                     .password(&config.password);
@@ -73,6 +91,10 @@ impl ConnectionManager {
 
     pub fn disconnect(&self, connection_id: &str) {
         self.pools
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(connection_id);
+        self.tunnels
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(connection_id);

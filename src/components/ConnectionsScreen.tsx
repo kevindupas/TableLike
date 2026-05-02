@@ -28,6 +28,7 @@ import { EditGroupDialog } from "./EditGroupDialog";
 import { ExportDialog } from "./ExportDialog";
 import { ImportDialog } from "./ImportDialog";
 import { connectDb, getPassword } from "../lib/tauri-commands";
+import { GroupAvatar } from "./GroupAvatar";
 
 const DB_LABELS: Record<string, string> = { postgresql: "Pg", mysql: "My", sqlite: "Sl" };
 type ExportScope = "all" | "group" | "single";
@@ -150,7 +151,7 @@ function GroupRow({ group, count, isOverDrop, collapsed, onToggle, onContextMenu
         {collapsed
           ? <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
-        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+        <GroupAvatar name={group.name} color={group.color} icon={group.icon} size={20} />
         <span className="text-xs font-medium text-muted-foreground truncate">{group.name}</span>
         <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">{count}</span>
       </div>
@@ -473,7 +474,7 @@ export function ConnectionsScreen() {
       <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
       <EditConnectionDialog conn={editConn} onClose={() => setEditConn(null)} />
       <CreateGroupDialog open={groupDialogOpen} onClose={() => setGroupDialogOpen(false)} onCreate={(name, color, icon) => addGroup({ id: crypto.randomUUID(), name, color, icon, collapsed: false })} />
-      <EditGroupDialog group={editGroup} onClose={() => setEditGroup(null)} onSave={(id, name, color) => updateGroup(id, { name, color })} />
+      <EditGroupDialog group={editGroup} onClose={() => setEditGroup(null)} onSave={(id, name, color, icon) => updateGroup(id, { name, color, icon })} />
       <ExportDialog open={exportState.open} scope={exportState.scope} groupId={exportState.groupId} connId={exportState.connId} onClose={() => setExportState({ open: false, scope: "all" })} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
 

@@ -11,6 +11,15 @@ pub struct ConnectionConfig {
     pub username: String,
     pub password: String,
     pub color: String,
+    pub ssh_host: Option<String>,
+    pub ssh_port: Option<u16>,
+    pub ssh_username: Option<String>,
+    pub ssh_auth_method: Option<String>,
+    pub ssh_password: Option<String>,
+    pub ssh_private_key_path: Option<String>,
+    pub ssh_use_password_auth: Option<bool>,
+    pub ssh_add_legacy_kex: Option<bool>,
+    pub ssh_add_legacy_host_key: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

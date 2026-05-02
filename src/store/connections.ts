@@ -13,6 +13,18 @@ export interface ConnectionGroup {
   icon?: string; // base64 data URL, max 64×64px
 }
 
+export interface SshConfig {
+  host: string;
+  port: number;
+  username: string;
+  authMethod: "key" | "password";
+  password?: string;
+  privateKeyPath?: string;
+  usePasswordAuth: boolean;
+  addLegacyKexAlgos: boolean;
+  addLegacyHostKeyAlgos: boolean;
+}
+
 export interface Connection {
   id: string;
   name: string;
@@ -23,6 +35,7 @@ export interface Connection {
   username: string;
   color: string;
   groupId?: string;
+  ssh?: SshConfig;
 }
 
 interface ConnectionStore {

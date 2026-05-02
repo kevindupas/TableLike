@@ -151,7 +151,7 @@ function GroupRow({ group, count, isOverDrop, collapsed, onToggle, onContextMenu
         {collapsed
           ? <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
-        <GroupAvatar name={group.name} color={group.color} icon={group.icon} size={20} />
+        <GroupAvatar name={group.name} color={group.color} icon={group.icon} size={28} />
         <span className="text-xs font-medium text-muted-foreground truncate">{group.name}</span>
         <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">{count}</span>
       </div>

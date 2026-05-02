@@ -10,6 +10,7 @@ export interface ConnectionGroup {
   name: string;
   color: string;
   collapsed: boolean;
+  icon?: string; // base64 data URL, max 64×64px
 }
 
 export interface Connection {

@@ -48,13 +48,16 @@ const customCollision: CollisionDetection = (args) => {
 function BetweenZone({ id, active, dragging }: { id: string; active: boolean; dragging: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const highlight = isOver || active;
+  // Height must be non-zero so dnd-kit can detect pointer intersection.
+  // Negative margin collapses the visual space so layout is unaffected.
   return (
-    <div ref={setNodeRef} className="relative h-0">
-      {dragging && (
-        <div className="absolute inset-x-0 -top-3 -bottom-3 z-20" />
-      )}
+    <div
+      ref={setNodeRef}
+      className="relative"
+      style={{ height: dragging ? 12 : 0, marginTop: dragging ? -6 : 0, marginBottom: dragging ? -6 : 0 }}
+    >
       {highlight && (
-        <div className="absolute inset-x-4 -top-px h-0.5 bg-blue-500 rounded-full z-30" />
+        <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 h-0.5 bg-blue-500 rounded-full z-30" />
       )}
     </div>
   );

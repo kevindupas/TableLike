@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { IconPicker } from "./IconPicker";
 
 const GROUP_COLORS = [
   "#6b7280", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6",
@@ -11,20 +12,22 @@ const GROUP_COLORS = [
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, color: string) => void;
+  onCreate: (name: string, color: string, icon?: string) => void;
 }
 
 export function CreateGroupDialog({ open, onClose, onCreate }: Props) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(GROUP_COLORS[0]);
+  const [icon, setIcon] = useState<string | undefined>(undefined);
 
   if (!open) return null;
 
   function handleCreate() {
     if (!name.trim()) return;
-    onCreate(name.trim(), color);
+    onCreate(name.trim(), color, icon);
     setName("");
     setColor(GROUP_COLORS[0]);
+    setIcon(undefined);
     onClose();
   }
 
@@ -40,6 +43,11 @@ export function CreateGroupDialog({ open, onClose, onCreate }: Props) {
         </div>
 
         <div className="px-4 py-4 space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Icon</Label>
+            <IconPicker name={name} color={color} icon={icon} onChange={setIcon} />
+          </div>
+
           <div className="space-y-1.5">
             <Label className="text-xs">Group name</Label>
             <Input

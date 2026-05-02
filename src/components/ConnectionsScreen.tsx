@@ -472,7 +472,7 @@ export function ConnectionsScreen() {
       {/* Dialogs */}
       <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
       <EditConnectionDialog conn={editConn} onClose={() => setEditConn(null)} />
-      <CreateGroupDialog open={groupDialogOpen} onClose={() => setGroupDialogOpen(false)} onCreate={(name, color) => addGroup({ id: crypto.randomUUID(), name, color, collapsed: false })} />
+      <CreateGroupDialog open={groupDialogOpen} onClose={() => setGroupDialogOpen(false)} onCreate={(name, color, icon) => addGroup({ id: crypto.randomUUID(), name, color, icon, collapsed: false })} />
       <EditGroupDialog group={editGroup} onClose={() => setEditGroup(null)} onSave={(id, name, color) => updateGroup(id, { name, color })} />
       <ExportDialog open={exportState.open} scope={exportState.scope} groupId={exportState.groupId} connId={exportState.connId} onClose={() => setExportState({ open: false, scope: "all" })} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />

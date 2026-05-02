@@ -68,6 +68,9 @@ const SSH_BACKENDS: { value: "russh" | "openssh"; label: string }[] = [
 interface Props {
   open: boolean;
   onClose: () => void;
+  onNewGroup?: () => void;
+  onImportFile?: () => void;
+  onImportUrl?: () => void;
 }
 
 // ── Small reusable select dropdown ──────────────────────────────────────────
@@ -335,7 +338,7 @@ function fieldCls(test: TestState, base = "") {
 
 // ── Main dialog ──────────────────────────────────────────────────────────────
 
-export function NewConnectionDialog({ open, onClose }: Props) {
+export function NewConnectionDialog({ open, onClose, onNewGroup, onImportFile, onImportUrl }: Props) {
   const [step, setStep] = useState<"pick-type" | "configure">("pick-type");
   const [selectedOption, setSelectedOption] = useState<DbOption | null>(null);
   const [dbTypeSearch, setDbTypeSearch] = useState("");
@@ -391,7 +394,6 @@ export function NewConnectionDialog({ open, onClose }: Props) {
       ...f,
       port: option.type === "postgresql" ? "5432" : option.type === "mysql" ? "3306" : "",
     }));
-    setStep("configure");
   }
 
   function buildSshParams() {
@@ -660,7 +662,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                       key={i}
                       onClick={() => handleTypeSelect(db)}
                       disabled={!db.available}
-                      className={`flex flex-col items-center gap-1.5 p-2 rounded-lg transition-colors ${db.available ? "hover:bg-accent cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-lg transition-colors ${!db.available ? "opacity-40 cursor-not-allowed" : selectedOption?.type === db.type ? "bg-accent ring-2 ring-blue-500" : "hover:bg-accent cursor-pointer"}`}
                     >
                       <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm" style={{ backgroundColor: db.color }}>
                         {db.abbr}
@@ -673,9 +675,28 @@ export function NewConnectionDialog({ open, onClose }: Props) {
               <div className="flex items-center justify-between px-4 py-3 border-t">
                 <button onClick={handleClose} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
                 <div className="flex items-center gap-2">
-                  <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">Import from URL</button>
-                  <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">New Group</button>
-                  <button disabled className="px-3 py-1 text-sm bg-blue-500 text-white rounded opacity-40 cursor-not-allowed">Create</button>
+                  <select
+                    className="text-sm text-muted-foreground bg-transparent border-none outline-none cursor-pointer hover:text-foreground transition-colors"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value === "file") { handleClose(); onImportFile?.(); }
+                      if (e.target.value === "url") { handleClose(); onImportUrl?.(); }
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="" disabled>Import connection</option>
+                    <option value="file">From file</option>
+                    <option value="url">From URL</option>
+                  </select>
+                  <button
+                    onClick={() => { onNewGroup?.(); }}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >New Group</button>
+                  <button
+                    onClick={() => setStep("configure")}
+                    disabled={!selectedOption}
+                    className={`px-3 py-1 text-sm bg-blue-500 text-white rounded transition-colors ${selectedOption ? "hover:bg-blue-600" : "opacity-40 cursor-not-allowed"}`}
+                  >Create</button>
                 </div>
               </div>
             </>

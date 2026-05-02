@@ -27,6 +27,7 @@ import { CreateGroupDialog } from "./CreateGroupDialog";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { ExportDialog } from "./ExportDialog";
 import { ImportDialog } from "./ImportDialog";
+import { ImportUrlDialog } from "./ImportUrlDialog";
 import { connectDb, getPassword, getSshPassword } from "../lib/tauri-commands";
 import { GroupAvatar } from "./GroupAvatar";
 
@@ -183,6 +184,7 @@ export function ConnectionsScreen() {
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<ConnectionGroup | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [importUrlOpen, setImportUrlOpen] = useState(false);
   const [exportState, setExportState] = useState<{ open: boolean; scope: ExportScope; groupId?: string; connId?: string }>({ open: false, scope: "all" });
   const [connCtx, setConnCtx] = useState<{ conn: Connection; x: number; y: number } | null>(null);
   const [groupCtx, setGroupCtx] = useState<{ group: ConnectionGroup; x: number; y: number } | null>(null);
@@ -503,12 +505,19 @@ export function ConnectionsScreen() {
       </div>
 
       {/* Dialogs */}
-      <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <NewConnectionDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onNewGroup={() => setGroupDialogOpen(true)}
+        onImportFile={() => setImportOpen(true)}
+        onImportUrl={() => setImportUrlOpen(true)}
+      />
       <EditConnectionDialog conn={editConn} onClose={() => setEditConn(null)} />
       <CreateGroupDialog open={groupDialogOpen} onClose={() => setGroupDialogOpen(false)} onCreate={(name, color, icon) => addGroup({ id: crypto.randomUUID(), name, color, icon, collapsed: false })} />
       <EditGroupDialog group={editGroup} onClose={() => setEditGroup(null)} onSave={(id, name, color, icon) => updateGroup(id, { name, color, icon })} />
       <ExportDialog open={exportState.open} scope={exportState.scope} groupId={exportState.groupId} connId={exportState.connId} onClose={() => setExportState({ open: false, scope: "all" })} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportUrlDialog open={importUrlOpen} onClose={() => setImportUrlOpen(false)} />
 
 
 

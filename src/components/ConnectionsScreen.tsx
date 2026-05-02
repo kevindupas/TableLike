@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Search, HardDrive, RotateCcw, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import {
@@ -7,17 +7,11 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  pointerWithin,
   DragStartEvent,
   DragEndEvent,
-  DragOverEvent,
+  useDroppable,
+  useDraggable,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
 import { useConnectionStore, Connection, ConnectionGroup, SortBy } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
 import { EditConnectionDialog } from "./EditConnectionDialog";
@@ -30,10 +24,15 @@ import { ImportDialog } from "./ImportDialog";
 import { connectDb, getPassword } from "../lib/tauri-commands";
 
 const DB_LABELS: Record<string, string> = { postgresql: "Pg", mysql: "My", sqlite: "Sl" };
-
 type ExportScope = "all" | "group" | "single";
 
-// ── Sortable connection row ──────────────────────────────────────────────────
+// ── Drag indicator line ──────────────────────────────────────────────────────
+
+function DropLine() {
+  return <div className="h-0.5 mx-4 bg-blue-500 rounded-full my-0.5" />;
+}
+
+// ── Draggable connection row ─────────────────────────────────────────────────
 
 interface ConnRowProps {
   conn: Connection;
@@ -44,61 +43,36 @@ interface ConnRowProps {
   onClick: () => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  dragOverlay?: boolean;
+  ghost?: boolean;
 }
 
-function ConnRow({
-  conn,
-  indent,
-  isActive,
-  isConn,
-  isLoading,
-  onClick,
-  onDoubleClick,
-  onContextMenu,
-  dragOverlay,
-}: ConnRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: conn.id, disabled: dragOverlay });
-
-  const style = dragOverlay
-    ? {}
-    : {
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        transition,
-        opacity: isDragging ? 0.3 : 1,
-      };
+function ConnRow({ conn, indent, isActive, isConn, isLoading, onClick, onDoubleClick, onContextMenu, ghost }: ConnRowProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: conn.id,
+    data: { type: "conn", conn },
+    disabled: ghost,
+  });
 
   return (
-    <div ref={dragOverlay ? undefined : setNodeRef} style={style}>
+    <div ref={ghost ? undefined : setNodeRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
       <button
-        {...(dragOverlay ? {} : { ...attributes, ...listeners })}
+        {...(ghost ? {} : { ...attributes, ...listeners })}
         onDoubleClick={onDoubleClick}
         onClick={onClick}
         onContextMenu={onContextMenu}
         disabled={isLoading}
-        className={`flex items-center gap-2 w-full py-2.5 rounded text-left transition-colors cursor-grab active:cursor-grabbing ${
-          indent ? "pl-8 pr-4" : "px-4"
-        } ${isActive ? "bg-accent text-accent-foreground" : "hover:bg-muted/60"}`}
+        className={`flex items-center gap-2 w-full py-2.5 rounded text-left transition-colors cursor-grab active:cursor-grabbing ${indent ? "pl-8 pr-4" : "px-4"} ${isActive ? "bg-accent text-accent-foreground" : "hover:bg-muted/60"}`}
       >
         <div className="relative shrink-0">
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[14px]"
-            style={{ backgroundColor: conn.color }}
-          >
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[14px]" style={{ backgroundColor: conn.color }}>
             {isLoading ? "…" : DB_LABELS[conn.type]}
           </div>
-          {isConn && (
-            <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-background" />
-          )}
+          {isConn && <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-background" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <span className="text-xs font-semibold truncate">{conn.name}</span>
-            <span
-              className="text-[11px] px-1 rounded font-medium shrink-0"
-              style={{ backgroundColor: conn.color + "28", color: conn.color }}
-            >
+            <span className="text-[11px] px-1 rounded font-medium shrink-0" style={{ backgroundColor: conn.color + "28", color: conn.color }}>
               {conn.type === "sqlite" ? "file" : "local"}
             </span>
           </div>
@@ -111,45 +85,38 @@ function ConnRow({
   );
 }
 
-// ── Droppable group header ───────────────────────────────────────────────────
+// ── Draggable + droppable group header ───────────────────────────────────────
 
-interface GroupHeaderProps {
+interface GroupRowProps {
   group: ConnectionGroup;
   count: number;
-  isOver: boolean;
+  isOverDrop: boolean;
   collapsed: boolean;
   onToggle: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  dragHandleProps?: Record<string, unknown>;
-  dragRef?: (el: HTMLElement | null) => void;
-  dragStyle?: React.CSSProperties;
+  ghost?: boolean;
 }
 
-function GroupHeader({
-  group,
-  count,
-  isOver,
-  collapsed,
-  onToggle,
-  onContextMenu,
-  dragHandleProps,
-  dragRef,
-  dragStyle,
-}: GroupHeaderProps) {
+function GroupRow({ group, count, isOverDrop, collapsed, onToggle, onContextMenu, ghost }: GroupRowProps) {
+  const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
+    id: group.id,
+    data: { type: "group", group },
+    disabled: ghost,
+  });
+  const { setNodeRef: dropRef, isOver } = useDroppable({ id: `grp:${group.id}` });
+
+  const highlight = isOverDrop || isOver;
+
   return (
-    <div
-      ref={dragRef}
-      style={dragStyle}
-      className={`flex items-center gap-1.5 w-full px-4 py-2.5 rounded transition-colors ${
-        isOver ? "bg-blue-500/20 ring-1 ring-blue-500" : "hover:bg-muted/40"
-      }`}
-      onContextMenu={onContextMenu}
-    >
-      <div {...(dragHandleProps ?? {})} className="flex items-center gap-1.5 flex-1 cursor-grab active:cursor-grabbing min-w-0" onClick={onToggle}>
-        {collapsed
-          ? <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-          : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-        }
+    <div ref={ghost ? undefined : dragRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
+      <div
+        ref={ghost ? undefined : dropRef}
+        onContextMenu={onContextMenu}
+        className={`flex items-center gap-1.5 w-full px-4 py-2.5 rounded transition-colors cursor-grab active:cursor-grabbing ${highlight ? "bg-blue-500/20 ring-1 ring-blue-500" : "hover:bg-muted/40"}`}
+        {...(ghost ? {} : { ...attributes, ...listeners })}
+        onClick={onToggle}
+      >
+        {collapsed ? <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
         <span className="text-xs font-medium text-muted-foreground truncate">{group.name}</span>
         <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">{count}</span>
@@ -158,81 +125,13 @@ function GroupHeader({
   );
 }
 
-// ── Sortable group (header + children) ──────────────────────────────────────
+// ── Droppable between-item zone ──────────────────────────────────────────────
 
-interface SortableGroupProps {
-  group: ConnectionGroup;
-  children: Connection[];
-  isOverGroup: boolean;
-  connectedIds: Set<string>;
-  connecting: string | null;
-  activeConnectionId: string | null;
-  onConnect: (c: Connection) => void;
-  onSelect: (c: Connection) => void;
-  onConnContextMenu: (e: React.MouseEvent, c: Connection) => void;
-  onGroupContextMenu: (e: React.MouseEvent, g: ConnectionGroup) => void;
-  onToggle: () => void;
-}
-
-function SortableGroup({
-  group,
-  children,
-  isOverGroup,
-  connectedIds,
-  connecting,
-  activeConnectionId,
-  onConnect,
-  onSelect,
-  onConnContextMenu,
-  onGroupContextMenu,
-  onToggle,
-}: SortableGroupProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: group.id });
-
-  const style: React.CSSProperties = {
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-  };
-
-  const childIds = children.map((c) => c.id);
-
+function BetweenZone({ id, show }: { id: string; show: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} style={style}>
-      <GroupHeader
-          group={group}
-          count={children.length}
-          isOver={isOverGroup}
-          collapsed={group.collapsed}
-          onToggle={onToggle}
-          onContextMenu={(e) => { e.preventDefault(); onGroupContextMenu(e, group); }}
-          dragHandleProps={{ ...attributes, ...listeners }}
-        />
-
-      {!group.collapsed && (
-        <SortableContext items={childIds} strategy={verticalListSortingStrategy}>
-          {children.map((conn) => (
-            <ConnRow
-              key={conn.id}
-              conn={conn}
-              indent
-              isActive={conn.id === activeConnectionId}
-              isConn={connectedIds.has(conn.id)}
-              isLoading={connecting === conn.id}
-              onClick={() => onSelect(conn)}
-              onDoubleClick={() => onConnect(conn)}
-              onContextMenu={(e) => { e.preventDefault(); onConnContextMenu(e, conn); }}
-            />
-          ))}
-        </SortableContext>
-      )}
+    <div ref={setNodeRef} className="h-2 mx-2 rounded">
+      {(isOver || show) && <DropLine />}
     </div>
   );
 }
@@ -241,24 +140,13 @@ function SortableGroup({
 
 export function ConnectionsScreen() {
   const {
-    connections,
-    groups,
-    sortBy,
-    order,
-    activeConnectionId,
-    connectedIds,
-    setActiveConnection,
-    setConnected,
-    removeConnection,
-    removeGroup,
-    addConnection,
-    addGroup,
-    updateGroup,
-    setSortBy,
-    toggleGroupCollapsed,
-    reorder,
-    moveConnectionToGroup,
-    reorderGroupChildren,
+    connections, groups, sortBy, order,
+    activeConnectionId, connectedIds,
+    setActiveConnection, setConnected,
+    removeConnection, removeGroup,
+    addConnection, addGroup, updateGroup,
+    setSortBy, toggleGroupCollapsed,
+    reorder, moveConnectionToGroup, reorderGroupChildren,
   } = useConnectionStore();
 
   const [search, setSearch] = useState("");
@@ -268,26 +156,29 @@ export function ConnectionsScreen() {
   const [editGroup, setEditGroup] = useState<ConnectionGroup | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [exportState, setExportState] = useState<{ open: boolean; scope: ExportScope; groupId?: string; connId?: string }>({ open: false, scope: "all" });
-  const [connContextMenu, setConnContextMenu] = useState<{ conn: Connection; x: number; y: number } | null>(null);
-  const [groupContextMenu, setGroupContextMenu] = useState<{ group: ConnectionGroup; x: number; y: number } | null>(null);
+  const [connCtx, setConnCtx] = useState<{ conn: Connection; x: number; y: number } | null>(null);
+  const [groupCtx, setGroupCtx] = useState<{ group: ConnectionGroup; x: number; y: number } | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
+  // Keep stable refs to avoid stale closures in drag handlers
+  const connectionsRef = useRef(connections);
+  const groupsRef = useRef(groups);
+  const orderRef = useRef(order);
+  useEffect(() => { connectionsRef.current = connections; }, [connections]);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+  useEffect(() => { orderRef.current = order; }, [order]);
 
   useEffect(() => {
     const win = getCurrentWindow();
     win.setResizable(false);
     win.setMaximizable(false);
-    return () => {
-      win.setResizable(true);
-      win.setMaximizable(true);
-    };
+    return () => { win.setResizable(true); win.setMaximizable(true); };
   }, []);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   async function handleConnect(conn: Connection) {
     if (connectedIds.has(conn.id)) { setActiveConnection(conn.id); return; }
@@ -305,123 +196,157 @@ export function ConnectionsScreen() {
     }
   }
 
-  // Build ordered list respecting order array, filtered by search
+  // Build display order
   const searchLower = search.toLowerCase();
-  const filteredConnIds = new Set(
-    connections.filter((c) => c.name.toLowerCase().includes(searchLower)).map((c) => c.id)
-  );
+  const visibleConnIds = new Set(connections.filter(c => c.name.toLowerCase().includes(searchLower)).map(c => c.id));
+  const groupMap = new Map(groups.map(g => [g.id, g]));
+  const connMap = new Map(connections.map(c => [c.id, c]));
 
-  // Ensure all items are in order (new items appended at end)
-  const allIds = [...new Set([...order, ...groups.map((g) => g.id), ...connections.filter((c) => !c.groupId).map((c) => c.id)])];
+  // All top-level ids in order (groups + ungrouped conns)
+  const knownIds = new Set([...order]);
+  const extraGroupIds = groups.map(g => g.id).filter(id => !knownIds.has(id));
+  const extraConnIds = connections.filter(c => !c.groupId && !knownIds.has(c.id)).map(c => c.id);
+  const allTopLevel = [...order.filter(id => groupMap.has(id) || (connMap.get(id) && !connMap.get(id)!.groupId)), ...extraGroupIds, ...extraConnIds];
 
-  const groupMap = new Map(groups.map((g) => [g.id, g]));
-  const connMap = new Map(connections.map((c) => [c.id, c]));
-
-  function getGroupChildren(groupId: string): Connection[] {
-    return connections.filter((c) => c.groupId === groupId && filteredConnIds.has(c.id));
-  }
-
-  // Top-level ordered items (groups + ungrouped connections)
-  const topLevelIds = allIds.filter((id) => {
-    if (groupMap.has(id)) return true;
-    const c = connMap.get(id);
-    return c && !c.groupId && filteredConnIds.has(c.id);
-  });
-
-  // Active dragged item info
+  // Active drag item
   const activeDragConn = activeId ? connMap.get(activeId) : null;
   const activeDragGroup = activeId ? groupMap.get(activeId) : null;
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(String(event.active.id));
-  }, []);
+  function handleDragStart(e: DragStartEvent) {
+    setActiveId(String(e.active.id));
+  }
 
-  const handleDragOver = useCallback((event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) { setDragOverGroupId(null); return; }
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const draggedConn = connMap.get(activeId);
-    if (!draggedConn) { setDragOverGroupId(null); return; }
-    // Hovering over a group header → highlight it
-    if (groupMap.has(overId)) {
-      setDragOverGroupId(overId);
-    // Hovering over a child conn inside a group → highlight that group
-    } else {
-      const overConn = connMap.get(overId);
-      setDragOverGroupId(overConn?.groupId ?? null);
-    }
-  }, [connMap, groupMap]);
+  function handleDragEnd(e: DragEndEvent) {
+    const draggedId = String(e.active.id);
+    const dropId = e.over ? String(e.over.id) : null;
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
     setActiveId(null);
-    setDragOverGroupId(null);
+    setOverId(null);
 
-    // Drop on empty space → exit group (ungrouped)
-    if (!over) {
-      const draggedConn = connMap.get(String(active.id));
-      if (draggedConn?.groupId) {
-        moveConnectionToGroup(String(active.id), undefined);
-      }
-      return;
-    }
+    const conns = connectionsRef.current;
+    const grps = groupsRef.current;
+    const ord = orderRef.current;
 
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const draggedConn = connMap.get(activeId);
-    const overConn = connMap.get(overId);
-    const overGroup = groupMap.get(overId);
+    const draggedConn = conns.find(c => c.id === draggedId);
+    const draggedGroup = grps.find(g => g.id === draggedId);
 
-    // Dragging a connection
+    // ── Connection drag ──────────────────────────────────────────────────────
     if (draggedConn) {
-      // Drop ON a group header → move into that group
-      if (overGroup) {
-        if (draggedConn.groupId !== overGroup.id) {
-          moveConnectionToGroup(activeId, overGroup.id);
+      // No drop target → ungrouped, stays in place
+      if (!dropId) {
+        if (draggedConn.groupId) moveConnectionToGroup(draggedId, undefined);
+        return;
+      }
+
+      // Drop on a group header → enter group
+      if (dropId.startsWith("grp:")) {
+        const targetGroupId = dropId.slice(4);
+        if (draggedConn.groupId !== targetGroupId) moveConnectionToGroup(draggedId, targetGroupId);
+        return;
+      }
+
+      // Drop on a between-zone: "between:<afterId>:<contextGroupId|none>"
+      if (dropId.startsWith("between:")) {
+        const [, afterId, ctxGroup] = dropId.split(":");
+        const targetGroupId = ctxGroup === "none" ? undefined : ctxGroup;
+
+        if (draggedConn.groupId !== targetGroupId) {
+          moveConnectionToGroup(draggedId, targetGroupId);
+        }
+
+        if (targetGroupId) {
+          // Reorder within group
+          const groupChildren = conns.filter(c => c.groupId === targetGroupId);
+          const others = groupChildren.filter(c => c.id !== draggedId);
+          const insertIdx = afterId === "start" ? 0 : others.findIndex(c => c.id === afterId) + 1;
+          const newOrder = [...others.slice(0, insertIdx), { ...draggedConn, groupId: targetGroupId }, ...others.slice(insertIdx)];
+          reorderGroupChildren(targetGroupId, newOrder.map(c => c.id));
+        } else {
+          // Reorder top-level
+          const topIds = [...new Set([...ord.filter(id => groupMap.has(id) || (connMap.get(id) && !connMap.get(id)!.groupId)), ...grps.map(g => g.id).filter(id => !ord.includes(id)), ...conns.filter(c => !c.groupId && !ord.includes(c.id)).map(c => c.id)])];
+          const others = topIds.filter(id => id !== draggedId);
+          const insertIdx = afterId === "start" ? 0 : others.findIndex(id => id === afterId) + 1;
+          others.splice(insertIdx, 0, draggedId);
+          reorder(others);
         }
         return;
       }
+    }
 
-      // Drop ON a sibling inside same group → reorder within group
-      if (overConn && draggedConn.groupId && draggedConn.groupId === overConn.groupId) {
-        const groupId = draggedConn.groupId;
-        const groupChildren = connections.filter((c) => c.groupId === groupId);
-        const oldIdx = groupChildren.findIndex((c) => c.id === activeId);
-        const newIdx = groupChildren.findIndex((c) => c.id === overId);
-        if (oldIdx !== -1 && newIdx !== -1 && oldIdx !== newIdx) {
-          reorderGroupChildren(groupId, arrayMove(groupChildren, oldIdx, newIdx).map((c) => c.id));
+    // ── Group drag ───────────────────────────────────────────────────────────
+    if (draggedGroup && dropId?.startsWith("between:")) {
+      const [, afterId] = dropId.split(":");
+      const others = allTopLevel.filter(id => id !== draggedId);
+      const insertIdx = afterId === "start" ? 0 : others.findIndex(id => id === afterId) + 1;
+      others.splice(insertIdx, 0, draggedId);
+      reorder(others);
+    }
+  }
+
+  // ── Render list ──────────────────────────────────────────────────────────
+
+  function renderBetween(afterId: string, groupId: string | undefined) {
+    const zoneId = `between:${afterId}:${groupId ?? "none"}`;
+    return <BetweenZone key={zoneId} id={zoneId} show={false} />;
+  }
+
+  const items: React.ReactNode[] = [];
+  items.push(renderBetween("start", undefined));
+
+  for (const topId of allTopLevel) {
+    const group = groupMap.get(topId);
+    if (group) {
+      const children = connections.filter(c => c.groupId === group.id && visibleConnIds.has(c.id));
+      items.push(
+        <GroupRow
+          key={group.id}
+          group={group}
+          count={children.length}
+          isOverDrop={overId === `grp:${group.id}`}
+          collapsed={group.collapsed}
+          onToggle={() => toggleGroupCollapsed(group.id)}
+          onContextMenu={(e) => { e.preventDefault(); setGroupCtx({ group, x: e.clientX, y: e.clientY }); }}
+        />
+      );
+      items.push(renderBetween(group.id, undefined));
+
+      if (!group.collapsed) {
+        items.push(renderBetween("start", group.id));
+        for (const child of children) {
+          items.push(
+            <ConnRow
+              key={child.id}
+              conn={child}
+              indent
+              isActive={child.id === activeConnectionId}
+              isConn={connectedIds.has(child.id)}
+              isLoading={connecting === child.id}
+              onClick={() => { setActiveConnection(child.id); setConnectError(null); }}
+              onDoubleClick={() => handleConnect(child)}
+              onContextMenu={(e) => { e.preventDefault(); setConnCtx({ conn: child, x: e.clientX, y: e.clientY }); }}
+            />
+          );
+          items.push(renderBetween(child.id, group.id));
         }
-        return;
       }
-
-      // Drop ON a top-level item (ungrouped conn or group) while dragged item is inside a group → exit group
-      if (draggedConn.groupId && topLevelIds.includes(overId)) {
-        moveConnectionToGroup(activeId, undefined);
-        const newTopLevel = [...topLevelIds, activeId];
-        const withoutActive = newTopLevel.filter((id) => id !== activeId);
-        const overIdx = withoutActive.indexOf(overId);
-        withoutActive.splice(overIdx + 1, 0, activeId);
-        reorder(withoutActive);
-        return;
-      }
-
-      // Reorder top-level ungrouped connections
-      if (!draggedConn.groupId && topLevelIds.includes(activeId) && topLevelIds.includes(overId) && activeId !== overId) {
-        const oldIdx = topLevelIds.indexOf(activeId);
-        const newIdx = topLevelIds.indexOf(overId);
-        reorder(arrayMove(topLevelIds, oldIdx, newIdx));
-      }
-      return;
+      continue;
     }
-
-    // Dragging a group → reorder top-level
-    if (groupMap.has(activeId) && topLevelIds.includes(overId) && activeId !== overId) {
-      const oldIdx = topLevelIds.indexOf(activeId);
-      const newIdx = topLevelIds.indexOf(overId);
-      reorder(arrayMove(topLevelIds, oldIdx, newIdx));
-    }
-  }, [connMap, groupMap, topLevelIds, connections, moveConnectionToGroup, reorder, reorderGroupChildren]);
+    const conn = connMap.get(topId);
+    if (!conn || !visibleConnIds.has(conn.id)) continue;
+    items.push(
+      <ConnRow
+        key={conn.id}
+        conn={conn}
+        isActive={conn.id === activeConnectionId}
+        isConn={connectedIds.has(conn.id)}
+        isLoading={connecting === conn.id}
+        onClick={() => { setActiveConnection(conn.id); setConnectError(null); }}
+        onDoubleClick={() => handleConnect(conn)}
+        onContextMenu={(e) => { e.preventDefault(); setConnCtx({ conn, x: e.clientX, y: e.clientY }); }}
+      />
+    );
+    items.push(renderBetween(conn.id, undefined));
+  }
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden relative">
@@ -469,7 +394,7 @@ export function ConnectionsScreen() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <div className="flex-1 overflow-y-auto p-2">
           {connectError && (
             <div className="mb-2 px-2 py-1.5 rounded bg-destructive/10 border border-destructive/20">
               <p className="text-[10px] text-destructive">{connectError}</p>
@@ -479,141 +404,77 @@ export function ConnectionsScreen() {
 
           <DndContext
             sensors={sensors}
-            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
+            onDragOver={(e) => setOverId(e.over ? String(e.over.id) : null)}
             onDragEnd={handleDragEnd}
+            onDragCancel={() => { setActiveId(null); setOverId(null); }}
           >
-            <SortableContext items={topLevelIds} strategy={verticalListSortingStrategy}>
-              {topLevelIds.map((id) => {
-                const group = groupMap.get(id);
-                if (group) {
-                  const children = getGroupChildren(group.id);
-                  return (
-                    <SortableGroup
-                      key={group.id}
-                      group={group}
-                      children={children}
-                      isOverGroup={dragOverGroupId === group.id}
-                      connectedIds={connectedIds}
-                      connecting={connecting}
-                      activeConnectionId={activeConnectionId}
-                      onConnect={handleConnect}
-                      onSelect={(c) => { setActiveConnection(c.id); setConnectError(null); }}
-                      onConnContextMenu={(e, c) => setConnContextMenu({ conn: c, x: e.clientX, y: e.clientY })}
-                      onGroupContextMenu={(e, g) => setGroupContextMenu({ group: g, x: e.clientX, y: e.clientY })}
-                      onToggle={() => toggleGroupCollapsed(group.id)}
-                    />
-                  );
-                }
-                const conn = connMap.get(id);
-                if (!conn) return null;
-                return (
-                  <ConnRow
-                    key={conn.id}
-                    conn={conn}
-                    isActive={conn.id === activeConnectionId}
-                    isConn={connectedIds.has(conn.id)}
-                    isLoading={connecting === conn.id}
-                    onClick={() => { setActiveConnection(conn.id); setConnectError(null); }}
-                    onDoubleClick={() => handleConnect(conn)}
-                    onContextMenu={(e) => { e.preventDefault(); setConnContextMenu({ conn, x: e.clientX, y: e.clientY }); }}
-                  />
-                );
-              })}
-            </SortableContext>
+            {items}
 
-            <DragOverlay>
+            <DragOverlay dropAnimation={null}>
               {activeDragConn && (
                 <ConnRow
                   conn={activeDragConn}
-                  indent={false}
                   isActive={false}
                   isConn={connectedIds.has(activeDragConn.id)}
                   isLoading={false}
-                  onClick={() => {}}
-                  onDoubleClick={() => {}}
-                  onContextMenu={() => {}}
-                  dragOverlay
+                  onClick={() => {}} onDoubleClick={() => {}} onContextMenu={() => {}}
+                  ghost
                 />
               )}
               {activeDragGroup && (
-                <div className="px-2 py-1 rounded bg-muted/80 border text-xs font-medium flex items-center gap-2 shadow-lg">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: activeDragGroup.color }} />
-                  {activeDragGroup.name}
-                </div>
+                <GroupRow
+                  group={activeDragGroup}
+                  count={connections.filter(c => c.groupId === activeDragGroup.id).length}
+                  isOverDrop={false}
+                  collapsed={activeDragGroup.collapsed}
+                  onToggle={() => {}} onContextMenu={() => {}}
+                  ghost
+                />
               )}
             </DragOverlay>
           </DndContext>
 
-          {connections.length === 0 && (
-            <p className="text-[10px] text-muted-foreground text-center py-6">No connections yet</p>
-          )}
-          {connections.length > 0 && topLevelIds.length === 0 && search && (
-            <p className="text-[10px] text-muted-foreground text-center py-6">No results</p>
-          )}
+          {connections.length === 0 && <p className="text-[10px] text-muted-foreground text-center py-6">No connections yet</p>}
         </div>
       </div>
 
       {/* Dialogs */}
       <NewConnectionDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
       <EditConnectionDialog conn={editConn} onClose={() => setEditConn(null)} />
-      <CreateGroupDialog
-        open={groupDialogOpen}
-        onClose={() => setGroupDialogOpen(false)}
-        onCreate={(name, color) => addGroup({ id: crypto.randomUUID(), name, color, collapsed: false })}
-      />
-      <EditGroupDialog
-        group={editGroup}
-        onClose={() => setEditGroup(null)}
-        onSave={(id, name, color) => updateGroup(id, { name, color })}
-      />
-      <ExportDialog
-        open={exportState.open}
-        scope={exportState.scope}
-        groupId={exportState.groupId}
-        connId={exportState.connId}
-        onClose={() => setExportState({ open: false, scope: "all" })}
-      />
+      <CreateGroupDialog open={groupDialogOpen} onClose={() => setGroupDialogOpen(false)} onCreate={(name, color) => addGroup({ id: crypto.randomUUID(), name, color, collapsed: false })} />
+      <EditGroupDialog group={editGroup} onClose={() => setEditGroup(null)} onSave={(id, name, color) => updateGroup(id, { name, color })} />
+      <ExportDialog open={exportState.open} scope={exportState.scope} groupId={exportState.groupId} connId={exportState.connId} onClose={() => setExportState({ open: false, scope: "all" })} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
 
-      {/* Connection context menu */}
-      {connContextMenu && (
+      {connCtx && (
         <ConnectionContextMenu
-          conn={connContextMenu.conn}
-          x={connContextMenu.x}
-          y={connContextMenu.y}
-          onClose={() => setConnContextMenu(null)}
-          onConnect={() => handleConnect(connContextMenu.conn)}
-          onEdit={() => setEditConn(connContextMenu.conn)}
-          onDuplicate={() => {
-            const src = connContextMenu.conn;
-            addConnection({ ...src, id: crypto.randomUUID(), name: `${src.name} copy` });
-          }}
-          onDelete={() => removeConnection(connContextMenu.conn.id)}
+          conn={connCtx.conn} x={connCtx.x} y={connCtx.y}
+          onClose={() => setConnCtx(null)}
+          onConnect={() => handleConnect(connCtx.conn)}
+          onEdit={() => setEditConn(connCtx.conn)}
+          onDuplicate={() => { const s = connCtx.conn; addConnection({ ...s, id: crypto.randomUUID(), name: `${s.name} copy` }); }}
+          onDelete={() => removeConnection(connCtx.conn.id)}
           onNewConnection={() => setDialogOpen(true)}
           onNewGroup={() => setGroupDialogOpen(true)}
           onSortBy={(s: SortBy) => setSortBy(s)}
           currentSort={sortBy}
           onImport={() => setImportOpen(true)}
           onExportAll={() => setExportState({ open: true, scope: "all" })}
-          onExportGroup={() => setExportState({ open: true, scope: "group", groupId: connContextMenu.conn.groupId })}
-          onExportSingle={() => setExportState({ open: true, scope: "single", connId: connContextMenu.conn.id })}
+          onExportGroup={() => setExportState({ open: true, scope: "group", groupId: connCtx.conn.groupId })}
+          onExportSingle={() => setExportState({ open: true, scope: "single", connId: connCtx.conn.id })}
         />
       )}
 
-      {/* Group context menu */}
-      {groupContextMenu && (
+      {groupCtx && (
         <GroupContextMenu
-          group={groupContextMenu.group}
-          x={groupContextMenu.x}
-          y={groupContextMenu.y}
-          onClose={() => setGroupContextMenu(null)}
-          onEdit={() => setEditGroup(groupContextMenu.group)}
+          group={groupCtx.group} x={groupCtx.x} y={groupCtx.y}
+          onClose={() => setGroupCtx(null)}
+          onEdit={() => setEditGroup(groupCtx.group)}
           onNewConnection={() => setDialogOpen(true)}
           onNewGroup={() => setGroupDialogOpen(true)}
-          onExportGroup={() => setExportState({ open: true, scope: "group", groupId: groupContextMenu.group.id })}
-          onDelete={() => removeGroup(groupContextMenu.group.id)}
+          onExportGroup={() => setExportState({ open: true, scope: "group", groupId: groupCtx.group.id })}
+          onDelete={() => removeGroup(groupCtx.group.id)}
         />
       )}
     </div>

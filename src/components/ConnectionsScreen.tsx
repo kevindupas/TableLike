@@ -9,9 +9,17 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
+  DragOverEvent,
   useDroppable,
-  useDraggable,
+  closestCenter,
 } from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useConnectionStore, Connection, ConnectionGroup, SortBy } from "../store/connections";
 import { NewConnectionDialog } from "./NewConnectionDialog";
 import { EditConnectionDialog } from "./EditConnectionDialog";
@@ -25,12 +33,6 @@ import { connectDb, getPassword } from "../lib/tauri-commands";
 
 const DB_LABELS: Record<string, string> = { postgresql: "Pg", mysql: "My", sqlite: "Sl" };
 type ExportScope = "all" | "group" | "single";
-
-// ── Drag indicator line ──────────────────────────────────────────────────────
-
-function DropLine() {
-  return <div className="h-0.5 mx-4 bg-blue-500 rounded-full my-0.5" />;
-}
 
 // ── Draggable connection row ─────────────────────────────────────────────────
 
@@ -47,14 +49,27 @@ interface ConnRowProps {
 }
 
 function ConnRow({ conn, indent, isActive, isConn, isLoading, onClick, onDoubleClick, onContextMenu, ghost }: ConnRowProps) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: conn.id,
     data: { type: "conn", conn },
     disabled: ghost,
   });
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
   return (
-    <div ref={ghost ? undefined : setNodeRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
+    <div ref={ghost ? undefined : setNodeRef} style={ghost ? undefined : style}>
       <button
         {...(ghost ? {} : { ...attributes, ...listeners })}
         onDoubleClick={onDoubleClick}
@@ -98,17 +113,31 @@ interface GroupRowProps {
 }
 
 function GroupRow({ group, count, isOverDrop, collapsed, onToggle, onContextMenu, ghost }: GroupRowProps) {
-  const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef: sortableRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: group.id,
     data: { type: "group", group },
     disabled: ghost,
   });
+
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: `grp:${group.id}` });
 
   const highlight = isOverDrop || isOver;
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
   return (
-    <div ref={ghost ? undefined : dragRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
+    <div ref={ghost ? undefined : sortableRef} style={ghost ? undefined : style}>
       <div
         ref={ghost ? undefined : dropRef}
         onContextMenu={onContextMenu}
@@ -121,17 +150,6 @@ function GroupRow({ group, count, isOverDrop, collapsed, onToggle, onContextMenu
         <span className="text-xs font-medium text-muted-foreground truncate">{group.name}</span>
         <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">{count}</span>
       </div>
-    </div>
-  );
-}
-
-// ── Droppable between-item zone ──────────────────────────────────────────────
-
-function BetweenZone({ id, show }: { id: string; show: boolean }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  return (
-    <div ref={setNodeRef} className="h-2 mx-2 rounded">
-      {(isOver || show) && <DropLine />}
     </div>
   );
 }
@@ -167,6 +185,7 @@ export function ConnectionsScreen() {
   const connectionsRef = useRef(connections);
   const groupsRef = useRef(groups);
   const orderRef = useRef(order);
+  const lastMovedToGroupRef = useRef<string | undefined>(undefined);
   useEffect(() => { connectionsRef.current = connections; }, [connections]);
   useEffect(() => { groupsRef.current = groups; }, [groups]);
   useEffect(() => { orderRef.current = order; }, [order]);
@@ -202,11 +221,17 @@ export function ConnectionsScreen() {
   const groupMap = new Map(groups.map(g => [g.id, g]));
   const connMap = new Map(connections.map(c => [c.id, c]));
 
+  function buildTopLevel(conns: typeof connections, grps: typeof groups, ord: typeof order) {
+    const gMap = new Map(grps.map(g => [g.id, g]));
+    const cMap = new Map(conns.map(c => [c.id, c]));
+    const knownSet = new Set(ord);
+    const extras = grps.map(g => g.id).filter(id => !knownSet.has(id));
+    const extraConns = conns.filter(c => !c.groupId && !knownSet.has(c.id)).map(c => c.id);
+    return [...ord.filter(id => { const c = cMap.get(id); return gMap.has(id) || (c != null && !c.groupId); }), ...extras, ...extraConns];
+  }
+
   // All top-level ids in order (groups + ungrouped conns)
-  const knownIds = new Set([...order]);
-  const extraGroupIds = groups.map(g => g.id).filter(id => !knownIds.has(id));
-  const extraConnIds = connections.filter(c => !c.groupId && !knownIds.has(c.id)).map(c => c.id);
-  const allTopLevel = [...order.filter(id => groupMap.has(id) || (connMap.get(id) && !connMap.get(id)!.groupId)), ...extraGroupIds, ...extraConnIds];
+  const allTopLevel = buildTopLevel(connections, groups, order);
 
   // Active drag item
   const activeDragConn = activeId ? connMap.get(activeId) : null;
@@ -216,136 +241,77 @@ export function ConnectionsScreen() {
     setActiveId(String(e.active.id));
   }
 
-  function handleDragEnd(e: DragEndEvent) {
-    const draggedId = String(e.active.id);
-    const dropId = e.over ? String(e.over.id) : null;
+  function handleDragOver(e: DragOverEvent) {
+    const { active, over } = e;
+    if (!over) { setOverId(null); return; }
+    const ovId = String(over.id);
+    setOverId(ovId);
 
+    const draggedId = String(active.id);
+    const draggedConn = connectionsRef.current.find(c => c.id === draggedId);
+    if (!draggedConn) return;
+
+    if (ovId.startsWith("grp:")) {
+      const targetGroupId = ovId.slice(4);
+      if (lastMovedToGroupRef.current !== targetGroupId) {
+        lastMovedToGroupRef.current = targetGroupId;
+        moveConnectionToGroup(draggedId, targetGroupId);
+      }
+    } else {
+      lastMovedToGroupRef.current = undefined;
+    }
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
     setActiveId(null);
     setOverId(null);
+    lastMovedToGroupRef.current = undefined;
+
+    if (!over) return;
+
+    const draggedId = String(active.id);
+    const landedId = String(over.id);
 
     const conns = connectionsRef.current;
     const grps = groupsRef.current;
     const ord = orderRef.current;
 
     const draggedConn = conns.find(c => c.id === draggedId);
-    const draggedGroup = grps.find(g => g.id === draggedId);
 
-    // ── Connection drag ──────────────────────────────────────────────────────
-    if (draggedConn) {
-      // No drop target → ungrouped, stays in place
-      if (!dropId) {
-        if (draggedConn.groupId) moveConnectionToGroup(draggedId, undefined);
-        return;
+    if (draggedConn && landedId.startsWith("grp:")) {
+      const targetGroupId = landedId.slice(4);
+      if (draggedConn.groupId !== targetGroupId) {
+        moveConnectionToGroup(draggedId, targetGroupId);
       }
+      return;
+    }
 
-      // Drop on a group header → enter group
-      if (dropId.startsWith("grp:")) {
-        const targetGroupId = dropId.slice(4);
-        if (draggedConn.groupId !== targetGroupId) moveConnectionToGroup(draggedId, targetGroupId);
-        return;
-      }
-
-      // Drop on a between-zone: "between:<afterId>:<contextGroupId|none>"
-      if (dropId.startsWith("between:")) {
-        const [, afterId, ctxGroup] = dropId.split(":");
-        const targetGroupId = ctxGroup === "none" ? undefined : ctxGroup;
-
-        if (draggedConn.groupId !== targetGroupId) {
-          moveConnectionToGroup(draggedId, targetGroupId);
-        }
-
-        if (targetGroupId) {
-          // Reorder within group
-          const groupChildren = conns.filter(c => c.groupId === targetGroupId);
-          const others = groupChildren.filter(c => c.id !== draggedId);
-          const insertIdx = afterId === "start" ? 0 : others.findIndex(c => c.id === afterId) + 1;
-          const newOrder = [...others.slice(0, insertIdx), { ...draggedConn, groupId: targetGroupId }, ...others.slice(insertIdx)];
-          reorderGroupChildren(targetGroupId, newOrder.map(c => c.id));
-        } else {
-          // Reorder top-level
-          const topIds = [...new Set([...ord.filter(id => groupMap.has(id) || (connMap.get(id) && !connMap.get(id)!.groupId)), ...grps.map(g => g.id).filter(id => !ord.includes(id)), ...conns.filter(c => !c.groupId && !ord.includes(c.id)).map(c => c.id)])];
-          const others = topIds.filter(id => id !== draggedId);
-          const insertIdx = afterId === "start" ? 0 : others.findIndex(id => id === afterId) + 1;
-          others.splice(insertIdx, 0, draggedId);
-          reorder(others);
+    if (draggedConn?.groupId) {
+      const groupChildren = conns
+        .filter(c => c.groupId === draggedConn.groupId)
+        .map(c => c.id);
+      if (groupChildren.includes(landedId)) {
+        const oldIdx = groupChildren.indexOf(draggedId);
+        const newIdx = groupChildren.indexOf(landedId);
+        if (oldIdx !== newIdx) {
+          reorderGroupChildren(draggedConn.groupId, arrayMove(groupChildren, oldIdx, newIdx));
         }
         return;
       }
+      // Landed outside the group — eject to top-level
+      moveConnectionToGroup(draggedId, undefined);
     }
 
-    // ── Group drag ───────────────────────────────────────────────────────────
-    if (draggedGroup && dropId?.startsWith("between:")) {
-      const [, afterId] = dropId.split(":");
-      const others = allTopLevel.filter(id => id !== draggedId);
-      const insertIdx = afterId === "start" ? 0 : others.findIndex(id => id === afterId) + 1;
-      others.splice(insertIdx, 0, draggedId);
-      reorder(others);
-    }
-  }
+    const topIds = buildTopLevel(conns, grps, ord);
 
-  // ── Render list ──────────────────────────────────────────────────────────
-
-  function renderBetween(afterId: string, groupId: string | undefined) {
-    const zoneId = `between:${afterId}:${groupId ?? "none"}`;
-    return <BetweenZone key={zoneId} id={zoneId} show={false} />;
-  }
-
-  const items: React.ReactNode[] = [];
-  items.push(renderBetween("start", undefined));
-
-  for (const topId of allTopLevel) {
-    const group = groupMap.get(topId);
-    if (group) {
-      const children = connections.filter(c => c.groupId === group.id && visibleConnIds.has(c.id));
-      items.push(
-        <GroupRow
-          key={group.id}
-          group={group}
-          count={children.length}
-          isOverDrop={overId === `grp:${group.id}`}
-          collapsed={group.collapsed}
-          onToggle={() => toggleGroupCollapsed(group.id)}
-          onContextMenu={(e) => { e.preventDefault(); setGroupCtx({ group, x: e.clientX, y: e.clientY }); }}
-        />
-      );
-      items.push(renderBetween(group.id, undefined));
-
-      if (!group.collapsed) {
-        items.push(renderBetween("start", group.id));
-        for (const child of children) {
-          items.push(
-            <ConnRow
-              key={child.id}
-              conn={child}
-              indent
-              isActive={child.id === activeConnectionId}
-              isConn={connectedIds.has(child.id)}
-              isLoading={connecting === child.id}
-              onClick={() => { setActiveConnection(child.id); setConnectError(null); }}
-              onDoubleClick={() => handleConnect(child)}
-              onContextMenu={(e) => { e.preventDefault(); setConnCtx({ conn: child, x: e.clientX, y: e.clientY }); }}
-            />
-          );
-          items.push(renderBetween(child.id, group.id));
-        }
+    if (topIds.includes(landedId) && topIds.includes(draggedId)) {
+      const oldIdx = topIds.indexOf(draggedId);
+      const newIdx = topIds.indexOf(landedId);
+      if (oldIdx !== newIdx) {
+        reorder(arrayMove(topIds, oldIdx, newIdx));
       }
-      continue;
     }
-    const conn = connMap.get(topId);
-    if (!conn || !visibleConnIds.has(conn.id)) continue;
-    items.push(
-      <ConnRow
-        key={conn.id}
-        conn={conn}
-        isActive={conn.id === activeConnectionId}
-        isConn={connectedIds.has(conn.id)}
-        isLoading={connecting === conn.id}
-        onClick={() => { setActiveConnection(conn.id); setConnectError(null); }}
-        onDoubleClick={() => handleConnect(conn)}
-        onContextMenu={(e) => { e.preventDefault(); setConnCtx({ conn, x: e.clientX, y: e.clientY }); }}
-      />
-    );
-    items.push(renderBetween(conn.id, undefined));
   }
 
   return (
@@ -404,33 +370,88 @@ export function ConnectionsScreen() {
 
           <DndContext
             sensors={sensors}
+            collisionDetection={closestCenter}
             onDragStart={handleDragStart}
-            onDragOver={(e) => setOverId(e.over ? String(e.over.id) : null)}
+            onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
             onDragCancel={() => { setActiveId(null); setOverId(null); }}
           >
-            {items}
+            <SortableContext items={allTopLevel} strategy={verticalListSortingStrategy}>
+              {allTopLevel.map(topId => {
+                const group = groupMap.get(topId);
+                if (group) {
+                  const children = connections.filter(c => c.groupId === group.id && visibleConnIds.has(c.id));
+                  return (
+                    <div key={group.id}>
+                      <GroupRow
+                        group={group}
+                        count={children.length}
+                        isOverDrop={overId === `grp:${group.id}`}
+                        collapsed={group.collapsed}
+                        onToggle={() => toggleGroupCollapsed(group.id)}
+                        onContextMenu={(e) => { e.preventDefault(); setGroupCtx({ group, x: e.clientX, y: e.clientY }); }}
+                      />
+                      {!group.collapsed && (
+                        <SortableContext items={children.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                          {children.map(child => (
+                            <ConnRow
+                              key={child.id}
+                              conn={child}
+                              indent
+                              isActive={child.id === activeConnectionId}
+                              isConn={connectedIds.has(child.id)}
+                              isLoading={connecting === child.id}
+                              onClick={() => { setActiveConnection(child.id); setConnectError(null); }}
+                              onDoubleClick={() => handleConnect(child)}
+                              onContextMenu={(e) => { e.preventDefault(); setConnCtx({ conn: child, x: e.clientX, y: e.clientY }); }}
+                            />
+                          ))}
+                        </SortableContext>
+                      )}
+                    </div>
+                  );
+                }
+                const conn = connMap.get(topId);
+                if (!conn || !visibleConnIds.has(conn.id)) return null;
+                return (
+                  <ConnRow
+                    key={conn.id}
+                    conn={conn}
+                    isActive={conn.id === activeConnectionId}
+                    isConn={connectedIds.has(conn.id)}
+                    isLoading={connecting === conn.id}
+                    onClick={() => { setActiveConnection(conn.id); setConnectError(null); }}
+                    onDoubleClick={() => handleConnect(conn)}
+                    onContextMenu={(e) => { e.preventDefault(); setConnCtx({ conn, x: e.clientX, y: e.clientY }); }}
+                  />
+                );
+              })}
+            </SortableContext>
 
             <DragOverlay dropAnimation={null}>
               {activeDragConn && (
-                <ConnRow
-                  conn={activeDragConn}
-                  isActive={false}
-                  isConn={connectedIds.has(activeDragConn.id)}
-                  isLoading={false}
-                  onClick={() => {}} onDoubleClick={() => {}} onContextMenu={() => {}}
-                  ghost
-                />
+                <div className="opacity-80 shadow-xl scale-[1.02] rounded ring-1 ring-blue-500/50">
+                  <ConnRow
+                    conn={activeDragConn}
+                    isActive={false}
+                    isConn={connectedIds.has(activeDragConn.id)}
+                    isLoading={false}
+                    onClick={() => {}} onDoubleClick={() => {}} onContextMenu={() => {}}
+                    ghost
+                  />
+                </div>
               )}
               {activeDragGroup && (
-                <GroupRow
-                  group={activeDragGroup}
-                  count={connections.filter(c => c.groupId === activeDragGroup.id).length}
-                  isOverDrop={false}
-                  collapsed={activeDragGroup.collapsed}
-                  onToggle={() => {}} onContextMenu={() => {}}
-                  ghost
-                />
+                <div className="opacity-80 shadow-xl scale-[1.02] rounded ring-1 ring-blue-500/50">
+                  <GroupRow
+                    group={activeDragGroup}
+                    count={connections.filter(c => c.groupId === activeDragGroup.id).length}
+                    isOverDrop={false}
+                    collapsed={activeDragGroup.collapsed}
+                    onToggle={() => {}} onContextMenu={() => {}}
+                    ghost
+                  />
+                </div>
               )}
             </DragOverlay>
           </DndContext>

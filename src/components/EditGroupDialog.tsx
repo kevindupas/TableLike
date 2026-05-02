@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { ConnectionGroup } from "../store/connections";
+import { IconPicker } from "./IconPicker";
 
 const GROUP_COLORS = [
   "#6b7280", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6",
@@ -12,24 +13,26 @@ const GROUP_COLORS = [
 interface Props {
   group: ConnectionGroup | null;
   onClose: () => void;
-  onSave: (id: string, name: string, color: string) => void;
+  onSave: (id: string, name: string, color: string, icon?: string) => void;
 }
 
 export function EditGroupDialog({ group, onClose, onSave }: Props) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(GROUP_COLORS[0]);
+  const [icon, setIcon] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!group) return;
     setName(group.name);
     setColor(group.color);
+    setIcon(group.icon);
   }, [group]);
 
   if (!group) return null;
 
   function handleSave() {
     if (!name.trim() || !group) return;
-    onSave(group.id, name.trim(), color);
+    onSave(group.id, name.trim(), color, icon);
     onClose();
   }
 
@@ -46,6 +49,11 @@ export function EditGroupDialog({ group, onClose, onSave }: Props) {
 
         <div className="px-4 py-4 space-y-4">
           <div className="space-y-1.5">
+            <Label className="text-xs">Icon</Label>
+            <IconPicker name={name} color={color} icon={icon} onChange={setIcon} />
+          </div>
+
+          <div className="space-y-1.5">
             <Label className="text-xs">Group name</Label>
             <Input
               autoFocus
@@ -55,6 +63,7 @@ export function EditGroupDialog({ group, onClose, onSave }: Props) {
               className="h-8 text-sm"
             />
           </div>
+
           <div className="space-y-1.5">
             <Label className="text-xs">Color</Label>
             <div className="flex flex-wrap gap-2">

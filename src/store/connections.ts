@@ -28,6 +28,8 @@ interface ConnectionStore {
   connections: Connection[];
   groups: ConnectionGroup[];
   sortBy: SortBy;
+  // top-level order: group ids and ungrouped connection ids interleaved
+  order: string[];
   activeConnectionId: string | null;
   connectedIds: Set<string>;
   setActiveConnection: (id: string) => void;
@@ -40,6 +42,9 @@ interface ConnectionStore {
   updateGroup: (id: string, patch: Partial<Omit<ConnectionGroup, "id">>) => void;
   removeGroup: (id: string) => void;
   toggleGroupCollapsed: (id: string) => void;
+  reorder: (newOrder: string[]) => void;
+  moveConnectionToGroup: (connId: string, groupId: string | undefined) => void;
+  reorderGroupChildren: (groupId: string, newOrder: string[]) => void;
 }
 
 export const useConnectionStore = create<ConnectionStore>()(
@@ -48,11 +53,15 @@ export const useConnectionStore = create<ConnectionStore>()(
       connections: [],
       groups: [],
       sortBy: "none",
+      order: [],
       activeConnectionId: null,
       connectedIds: new Set<string>(),
       setActiveConnection: (id) => set({ activeConnectionId: id }),
       addConnection: (conn) =>
-        set((state) => ({ connections: [...state.connections, conn] })),
+        set((state) => ({
+          connections: [...state.connections, conn],
+          order: [...state.order, conn.id],
+        })),
       updateConnection: (id, patch) =>
         set((state) => ({
           connections: state.connections.map((c) =>
@@ -67,6 +76,7 @@ export const useConnectionStore = create<ConnectionStore>()(
           connectedIds.delete(id);
           return {
             connections: state.connections.filter((c) => c.id !== id),
+            order: state.order.filter((o) => o !== id),
             activeConnectionId:
               state.activeConnectionId === id ? null : state.activeConnectionId,
             connectedIds,
@@ -82,7 +92,10 @@ export const useConnectionStore = create<ConnectionStore>()(
         }),
       setSortBy: (sortBy) => set({ sortBy }),
       addGroup: (group) =>
-        set((state) => ({ groups: [...state.groups, group] })),
+        set((state) => ({
+          groups: [...state.groups, group],
+          order: [...state.order, group.id],
+        })),
       updateGroup: (id, patch) =>
         set((state) => ({
           groups: state.groups.map((g) => (g.id === id ? { ...g, ...patch } : g)),
@@ -90,6 +103,7 @@ export const useConnectionStore = create<ConnectionStore>()(
       removeGroup: (id) =>
         set((state) => ({
           groups: state.groups.filter((g) => g.id !== id),
+          order: state.order.filter((o) => o !== id),
           connections: state.connections.map((c) =>
             c.groupId === id ? { ...c, groupId: undefined } : c
           ),
@@ -100,6 +114,27 @@ export const useConnectionStore = create<ConnectionStore>()(
             g.id === id ? { ...g, collapsed: !g.collapsed } : g
           ),
         })),
+      reorder: (newOrder) => set({ order: newOrder }),
+      moveConnectionToGroup: (connId, groupId) =>
+        set((state) => ({
+          connections: state.connections.map((c) =>
+            c.id === connId ? { ...c, groupId } : c
+          ),
+          // if moving out of group, add to top-level order if not already there
+          order: groupId === undefined && !state.order.includes(connId)
+            ? [...state.order, connId]
+            : groupId !== undefined
+            ? state.order.filter((o) => o !== connId)
+            : state.order,
+        })),
+      reorderGroupChildren: (groupId, newOrder) =>
+        set((state) => {
+          const others = state.connections.filter((c) => c.groupId !== groupId);
+          const inGroup = newOrder
+            .map((id) => state.connections.find((c) => c.id === id))
+            .filter(Boolean) as Connection[];
+          return { connections: [...others, ...inGroup] };
+        }),
     }),
     {
       name: "tablelike-connections",
@@ -107,6 +142,7 @@ export const useConnectionStore = create<ConnectionStore>()(
         connections: state.connections,
         groups: state.groups,
         sortBy: state.sortBy,
+        order: state.order,
         activeConnectionId: state.activeConnectionId,
       }),
     }

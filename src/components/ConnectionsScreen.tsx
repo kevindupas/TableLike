@@ -27,7 +27,7 @@ import { CreateGroupDialog } from "./CreateGroupDialog";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { ExportDialog } from "./ExportDialog";
 import { ImportDialog } from "./ImportDialog";
-import { connectDb, getPassword } from "../lib/tauri-commands";
+import { connectDb, getPassword, getSshPassword } from "../lib/tauri-commands";
 import { GroupAvatar } from "./GroupAvatar";
 
 const DB_LABELS: Record<string, string> = { postgresql: "Pg", mysql: "My", sqlite: "Sl" };
@@ -208,7 +208,29 @@ export function ConnectionsScreen() {
     setConnectError(null);
     try {
       const password = await getPassword(conn.id).catch(() => "");
-      await connectDb({ id: conn.id, name: conn.name, db_type: conn.type, host: conn.host, port: conn.port, database: conn.database, username: conn.username, password, color: conn.color });
+      const sshPassword = conn.ssh?.authMethod === "password"
+        ? await getSshPassword(conn.id).catch(() => "")
+        : undefined;
+      await connectDb({
+        id: conn.id,
+        name: conn.name,
+        db_type: conn.type,
+        host: conn.host,
+        port: conn.port,
+        database: conn.database,
+        username: conn.username,
+        password,
+        color: conn.color,
+        ssh_host: conn.ssh?.host,
+        ssh_port: conn.ssh?.port,
+        ssh_username: conn.ssh?.username,
+        ssh_auth_method: conn.ssh?.authMethod,
+        ssh_password: sshPassword,
+        ssh_private_key_path: conn.ssh?.privateKeyPath,
+        ssh_use_password_auth: conn.ssh?.usePasswordAuth,
+        ssh_add_legacy_host_key: conn.ssh?.addLegacyHostKeyAlgos,
+        ssh_add_legacy_kex: conn.ssh?.addLegacyKexAlgos,
+      });
       setConnected(conn.id, true);
       setActiveConnection(conn.id);
     } catch (e) {

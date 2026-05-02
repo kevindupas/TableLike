@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { disconnectDb, deletePassword } from "../lib/tauri-commands";
+import { disconnectDb, deletePassword, deleteSshPassword } from "../lib/tauri-commands";
 
 export type DbType = "postgresql" | "mysql" | "sqlite";
 export type SortBy = "none" | "name" | "driver" | "tag";
@@ -85,6 +85,7 @@ export const useConnectionStore = create<ConnectionStore>()(
       removeConnection: (id) => {
         disconnectDb(id).catch(() => {});
         deletePassword(id).catch(() => {});
+        deleteSshPassword(id).catch(() => {});
         set((state) => {
           const connectedIds = new Set(state.connectedIds);
           connectedIds.delete(id);

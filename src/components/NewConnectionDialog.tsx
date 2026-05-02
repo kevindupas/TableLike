@@ -3,7 +3,7 @@ import { Search, X } from "lucide-react";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { DbType, useConnectionStore } from "../store/connections";
-import { connectDb, savePassword } from "../lib/tauri-commands";
+import { connectDb, savePassword, saveSshPassword } from "../lib/tauri-commands";
 
 interface DbOption {
   type: DbType;
@@ -49,6 +49,7 @@ export function NewConnectionDialog({ open, onClose }: Props) {
   const [step, setStep] = useState<"pick-type" | "configure">("pick-type");
   const [selectedOption, setSelectedOption] = useState<DbOption | null>(null);
   const [dbTypeSearch, setDbTypeSearch] = useState("");
+  const [sshEnabled, setSshEnabled] = useState(false);
   const [form, setForm] = useState({
     name: "",
     host: "127.0.0.1",
@@ -57,6 +58,15 @@ export function NewConnectionDialog({ open, onClose }: Props) {
     username: "",
     password: "",
     color: STATUS_COLORS[0],
+    // SSH fields
+    sshHost: "",
+    sshPort: "22",
+    sshUser: "",
+    sshPassword: "",
+    sshKeyPath: "",
+    sshUseKeyAuth: false,
+    sshUseLegacyHostKey: false,
+    sshUseLegacyKex: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,8 +105,22 @@ export function NewConnectionDialog({ open, onClose }: Props) {
         username: form.username,
         password: form.password,
         color: form.color,
+        ...(sshEnabled && {
+          ssh_host: form.sshHost,
+          ssh_port: parseInt(form.sshPort) || 22,
+          ssh_username: form.sshUser,
+          ssh_auth_method: form.sshUseKeyAuth ? "key" as const : "password" as const,
+          ssh_password: !form.sshUseKeyAuth ? form.sshPassword : undefined,
+          ssh_private_key_path: form.sshUseKeyAuth ? form.sshKeyPath : undefined,
+          ssh_use_password_auth: !form.sshUseKeyAuth,
+          ssh_add_legacy_host_key: form.sshUseLegacyHostKey,
+          ssh_add_legacy_kex: form.sshUseLegacyKex,
+        }),
       });
       if (form.password) await savePassword(id, form.password);
+      if (sshEnabled && !form.sshUseKeyAuth && form.sshPassword) {
+        await saveSshPassword(id, form.sshPassword);
+      }
       addConnection({
         id,
         name: form.name.trim() || `${selectedOption.label} connection`,
@@ -106,6 +130,16 @@ export function NewConnectionDialog({ open, onClose }: Props) {
         database: form.database,
         username: form.username,
         color: form.color,
+        ssh: sshEnabled ? {
+          host: form.sshHost,
+          port: parseInt(form.sshPort) || 22,
+          username: form.sshUser,
+          authMethod: form.sshUseKeyAuth ? "key" : "password",
+          privateKeyPath: form.sshUseKeyAuth ? form.sshKeyPath : undefined,
+          usePasswordAuth: !form.sshUseKeyAuth,
+          addLegacyKexAlgos: form.sshUseLegacyKex,
+          addLegacyHostKeyAlgos: form.sshUseLegacyHostKey,
+        } : undefined,
       });
       setConnected(id, true);
       setActiveConnection(id);
@@ -125,7 +159,24 @@ export function NewConnectionDialog({ open, onClose }: Props) {
       setSelectedOption(null);
       setDbTypeSearch("");
       setError(null);
-      setForm({ name: "", host: "127.0.0.1", port: "5432", database: "", username: "", password: "", color: STATUS_COLORS[0] });
+      setSshEnabled(false);
+      setForm({
+        name: "",
+        host: "127.0.0.1",
+        port: "5432",
+        database: "",
+        username: "",
+        password: "",
+        color: STATUS_COLORS[0],
+        sshHost: "",
+        sshPort: "22",
+        sshUser: "",
+        sshPassword: "",
+        sshKeyPath: "",
+        sshUseKeyAuth: false,
+        sshUseLegacyHostKey: false,
+        sshUseLegacyKex: false,
+      });
     }, 200);
   }
 
@@ -276,6 +327,117 @@ export function NewConnectionDialog({ open, onClose }: Props) {
                     <Label className="text-xs">Database</Label>
                     <Input value={form.database} onChange={(e) => setForm({ ...form, database: e.target.value })} disabled={loading} className="h-8 text-sm" />
                   </div>
+
+                  {/* Over SSH toggle — only for non-SQLite */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setSshEnabled(v => !v)}
+                      disabled={loading}
+                      className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
+                        sshEnabled
+                          ? "bg-blue-500 text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      Over SSH
+                    </button>
+                  </div>
+
+                  {sshEnabled && (
+                    <div className="space-y-3 pt-1 border-t">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2 space-y-1.5">
+                          <Label className="text-xs">SSH Server</Label>
+                          <Input
+                            value={form.sshHost}
+                            onChange={(e) => setForm({ ...form, sshHost: e.target.value })}
+                            placeholder="ssh.example.com"
+                            disabled={loading}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Port</Label>
+                          <Input
+                            value={form.sshPort}
+                            onChange={(e) => setForm({ ...form, sshPort: e.target.value })}
+                            disabled={loading}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">SSH User</Label>
+                        <Input
+                          value={form.sshUser}
+                          onChange={(e) => setForm({ ...form, sshUser: e.target.value })}
+                          placeholder="ubuntu"
+                          disabled={loading}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      {!form.sshUseKeyAuth && (
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">SSH Password</Label>
+                          <Input
+                            type="password"
+                            value={form.sshPassword}
+                            onChange={(e) => setForm({ ...form, sshPassword: e.target.value })}
+                            disabled={loading}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="ssh-key-auth"
+                          checked={form.sshUseKeyAuth}
+                          onChange={(e) => setForm({ ...form, sshUseKeyAuth: e.target.checked })}
+                          disabled={loading}
+                          className="h-3.5 w-3.5"
+                        />
+                        <label htmlFor="ssh-key-auth" className="text-xs cursor-pointer">Use SSH key</label>
+                      </div>
+                      {form.sshUseKeyAuth && (
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Private key path</Label>
+                          <Input
+                            value={form.sshKeyPath}
+                            onChange={(e) => setForm({ ...form, sshKeyPath: e.target.value })}
+                            placeholder="~/.ssh/id_rsa"
+                            disabled={loading}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="ssh-legacy-hostkey"
+                            checked={form.sshUseLegacyHostKey}
+                            onChange={(e) => setForm({ ...form, sshUseLegacyHostKey: e.target.checked })}
+                            disabled={loading}
+                            className="h-3.5 w-3.5"
+                          />
+                          <label htmlFor="ssh-legacy-hostkey" className="text-xs cursor-pointer">Legacy: add ssh-rsa host key algo</label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="ssh-legacy-kex"
+                            checked={form.sshUseLegacyKex}
+                            onChange={(e) => setForm({ ...form, sshUseLegacyKex: e.target.checked })}
+                            disabled={loading}
+                            className="h-3.5 w-3.5"
+                          />
+                          <label htmlFor="ssh-legacy-kex" className="text-xs cursor-pointer">Legacy: add diffie-hellman-group1-sha1 kex</label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="space-y-1.5">

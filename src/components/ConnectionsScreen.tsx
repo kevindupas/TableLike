@@ -43,20 +43,19 @@ const customCollision: CollisionDetection = (args) => {
   return rectIntersection(args);
 };
 
-// ── Drop indicator line ──────────────────────────────────────────────────────
-
-function DropLine() {
-  return <div className="h-0.5 mx-4 bg-blue-500 rounded-full" />;
-}
-
 // ── Between-zone droppable ───────────────────────────────────────────────────
 
 function BetweenZone({ id, active, dragging }: { id: string; active: boolean; dragging: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const highlight = isOver || active;
   return (
-    <div ref={setNodeRef} className={dragging ? "h-4 mx-2 flex items-center" : "h-0 overflow-hidden"}>
-      {highlight && <DropLine />}
+    <div ref={setNodeRef} className="relative h-0">
+      {dragging && (
+        <div className="absolute inset-x-0 -top-3 -bottom-3 z-20" />
+      )}
+      {highlight && (
+        <div className="absolute inset-x-4 -top-px h-0.5 bg-blue-500 rounded-full z-30" />
+      )}
     </div>
   );
 }

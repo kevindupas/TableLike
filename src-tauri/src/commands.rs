@@ -222,3 +222,85 @@ pub fn detect_ssh_keys() -> Vec<String> {
         .filter(|path| std::path::Path::new(path).exists())
         .collect()
 }
+
+#[tauri::command]
+pub async fn list_databases(
+    config: crate::db::types::ConnectionConfig,
+) -> Result<Vec<String>, String> {
+    use crate::db::types::DbType;
+
+    if config.ssh_host.is_some() {
+        let backend = config.ssh_backend.as_deref().unwrap_or("russh");
+        if backend == "openssh" {
+            let tunnel = crate::db::ssh_tunnel::OpenSshTunnel::connect(&config)
+                .await
+                .map_err(|e| format!("SSH tunnel: {e}"))?;
+            let port = tunnel.local_port;
+            let dbs = fetch_databases_pg_or_mysql(&config, "127.0.0.1", port).await?;
+            return Ok(dbs);
+        } else {
+            let tunnel = crate::db::ssh_tunnel::SshTunnel::connect(&config)
+                .await
+                .map_err(|e| format!("SSH tunnel: {e}"))?;
+            let port = tunnel.local_port;
+            let dbs = fetch_databases_pg_or_mysql(&config, "127.0.0.1", port).await?;
+            return Ok(dbs);
+        }
+    }
+
+    fetch_databases_pg_or_mysql(&config, &config.host.clone(), config.port).await
+}
+
+async fn fetch_databases_pg_or_mysql(
+    config: &crate::db::types::ConnectionConfig,
+    host: &str,
+    port: u16,
+) -> Result<Vec<String>, String> {
+    use crate::db::types::DbType;
+    use sqlx::Row;
+
+    match config.db_type {
+        DbType::Postgresql => {
+            use sqlx::postgres::PgConnectOptions;
+            let opts = PgConnectOptions::new()
+                .host(host)
+                .port(port)
+                .username(&config.username)
+                .password(&config.password)
+                .database("postgres");
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(1)
+                .connect_with(opts)
+                .await
+                .map_err(|e| e.to_string())?;
+            let rows = sqlx::query(
+                "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname"
+            )
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+            Ok(rows.iter().map(|r| r.get::<String, _>(0)).collect())
+        }
+        DbType::Mysql => {
+            use sqlx::mysql::MySqlConnectOptions;
+            let opts = MySqlConnectOptions::new()
+                .host(host)
+                .port(port)
+                .username(&config.username)
+                .password(&config.password);
+            let pool = sqlx::mysql::MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect_with(opts)
+                .await
+                .map_err(|e| e.to_string())?;
+            let rows = sqlx::query("SHOW DATABASES")
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(rows.iter().map(|r| r.get::<String, _>(0)).collect())
+        }
+        DbType::Sqlite => {
+            Ok(vec![config.database.clone()])
+        }
+    }
+}

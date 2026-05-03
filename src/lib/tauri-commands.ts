@@ -80,3 +80,42 @@ export async function detectSshKeys(): Promise<string[]> {
 export async function testSshConnection(config: Partial<RustConnectionConfig> & { id: string; name: string; db_type: RustConnectionConfig["db_type"]; host: string; port: number; database: string; username: string; password: string; color: string }): Promise<void> {
   return invoke<void>("test_ssh_connection", { config });
 }
+
+export interface JobStatus {
+  status: "running" | "done" | "error";
+  output: string;
+}
+
+type BackupRestoreConfig = Partial<RustConnectionConfig> & Pick<RustConnectionConfig, "id" | "name" | "db_type" | "host" | "port" | "database" | "username" | "password" | "color">;
+
+export async function listDatabases(config: BackupRestoreConfig): Promise<string[]> {
+  return invoke<string[]>("list_databases", { config });
+}
+
+export async function startBackup(
+  config: BackupRestoreConfig,
+  database: string,
+  outputPath: string,
+  flags: string[],
+  jobId: string,
+): Promise<void> {
+  return invoke<void>("start_backup", { config, database, outputPath, flags, jobId });
+}
+
+export async function startRestore(
+  config: BackupRestoreConfig,
+  database: string,
+  inputPath: string,
+  flags: string[],
+  jobId: string,
+): Promise<void> {
+  return invoke<void>("start_restore", { config, database, inputPath, flags, jobId });
+}
+
+export async function getJobStatus(jobId: string): Promise<JobStatus | null> {
+  return invoke<JobStatus | null>("get_job_status", { jobId });
+}
+
+export async function removeJob(jobId: string): Promise<void> {
+  return invoke<void>("remove_job", { jobId });
+}

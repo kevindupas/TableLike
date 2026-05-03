@@ -147,7 +147,7 @@ export function BackupDialog({ conn, onClose }: Props) {
       const flags = Array.from(activeFlags);
       if (gzip) flags.push("--gzip");
 
-      setJobId(id); setJobStatus("running"); setJobOutput("");
+      setJobId(id); setJobStatus("running"); setJobOutput(`Backup database '${selectedDb}'\nDumping...\n`);
 
       await startBackup(buildConfig(selectedConn, password, sshPassword), selectedDb, outputPath, flags, id);
     } catch (e) {
@@ -237,39 +237,33 @@ export function BackupDialog({ conn, onClose }: Props) {
           </div>
         </div>
 
-        {/* Col 3: Options + output */}
+        {/* Col 3: Options */}
         <div className="flex-1 flex flex-col">
-          {jobStatus === "idle" ? (
-            <div className="overflow-y-auto flex-1 p-4 space-y-1">
-              {flagList.length === 0 && selectedConn?.type === "sqlite" && (
-                <p className="text-xs text-muted-foreground">SQLite backup is a direct file copy. No options needed.</p>
-              )}
-              {flagList.map(f => (
-                <button
-                  key={f.flag}
-                  onClick={() => toggleFlag(f.flag)}
-                  className={`w-full text-left px-3 py-1.5 text-xs rounded font-mono transition-colors ${activeFlags.has(f.flag) ? "bg-blue-500/20 text-blue-400 border border-blue-500/40" : "bg-muted/40 text-muted-foreground border border-transparent hover:bg-muted"}`}
-                >
-                  {f.flag}
-                </button>
-              ))}
-              {showGzip && (
-                <label className="flex items-center gap-2 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={gzip}
-                    onChange={e => setGzip(e.target.checked)}
-                    className="rounded border-border accent-blue-500"
-                  />
-                  <span className="text-xs text-muted-foreground font-mono">Compress file using Gzip</span>
-                </label>
-              )}
-            </div>
-          ) : (
-            <div className="flex-1 bg-black p-4 font-mono text-xs text-green-400 overflow-y-auto whitespace-pre-wrap">
-              {jobOutput || "Starting..."}
-            </div>
-          )}
+          <div className="overflow-y-auto flex-1 p-4 space-y-1">
+            {flagList.length === 0 && selectedConn?.type === "sqlite" && (
+              <p className="text-xs text-muted-foreground">SQLite backup is a direct file copy. No options needed.</p>
+            )}
+            {flagList.map(f => (
+              <button
+                key={f.flag}
+                onClick={() => toggleFlag(f.flag)}
+                className={`w-full text-left px-3 py-1.5 text-xs rounded font-mono transition-colors ${activeFlags.has(f.flag) ? "bg-blue-500/20 text-blue-400 border border-blue-500/40" : "bg-muted/40 text-muted-foreground border border-transparent hover:bg-muted"}`}
+              >
+                {f.flag}
+              </button>
+            ))}
+            {showGzip && (
+              <label className="flex items-center gap-2 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={gzip}
+                  onChange={e => setGzip(e.target.checked)}
+                  className="rounded border-border accent-blue-500"
+                />
+                <span className="text-xs text-muted-foreground font-mono">Compress file using Gzip</span>
+              </label>
+            )}
+          </div>
           {error && (
             <div className="px-4 py-2 text-xs text-destructive border-t">{error}</div>
           )}
@@ -277,29 +271,46 @@ export function BackupDialog({ conn, onClose }: Props) {
       </div>
 
       <div className="flex items-center justify-end gap-3 px-6 py-3 border-t shrink-0">
-        {jobStatus === "idle" && (
-          <>
-            <button onClick={handleDone} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Cancel
-            </button>
-            <button
-              onClick={handleStartBackup}
-              disabled={!selectedConn || !selectedDb}
-              className="px-4 py-1.5 text-sm bg-muted hover:bg-muted/80 border rounded transition-colors disabled:opacity-40"
-            >
-              Start backup...
-            </button>
-          </>
-        )}
-        {jobStatus === "running" && (
-          <span className="text-xs text-muted-foreground animate-pulse">Running backup...</span>
-        )}
-        {(jobStatus === "done" || jobStatus === "error") && (
-          <button onClick={handleDone} className="px-4 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
-            Done
-          </button>
-        )}
+        <button onClick={handleDone} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          Cancel
+        </button>
+        <button
+          onClick={handleStartBackup}
+          disabled={!selectedConn || !selectedDb}
+          className="px-4 py-1.5 text-sm bg-muted hover:bg-muted/80 border rounded transition-colors disabled:opacity-40"
+        >
+          Start backup...
+        </button>
       </div>
+
+      {/* Output modal */}
+      {jobStatus !== "idle" && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50">
+          <div className="w-125 bg-background border rounded-lg shadow-2xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <span className="text-sm font-semibold">Backup database</span>
+              {(jobStatus === "done" || jobStatus === "error") && (
+                <button onClick={handleDone} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="bg-black p-4 font-mono text-xs text-green-400 whitespace-pre-wrap min-h-30 max-h-75 overflow-y-auto">
+              {jobOutput || "Starting..."}
+            </div>
+            <div className="flex justify-end px-4 py-3 border-t">
+              {jobStatus === "running" && (
+                <span className="text-xs text-muted-foreground animate-pulse">Running...</span>
+              )}
+              {(jobStatus === "done" || jobStatus === "error") && (
+                <button onClick={handleDone} className="px-4 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+                  Done
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

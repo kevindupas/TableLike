@@ -303,6 +303,23 @@ async fn fetch_databases_pg_or_mysql(
     }
 }
 
+fn resolve_bin(name: &str) -> String {
+    // Tauri on macOS launches without a login shell PATH — check common install locations
+    let candidates = [
+        format!("/opt/homebrew/bin/{name}"),
+        format!("/opt/homebrew/opt/libpq/bin/{name}"),
+        format!("/usr/local/bin/{name}"),
+        format!("/usr/local/opt/libpq/bin/{name}"),
+        format!("/usr/bin/{name}"),
+    ];
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return path.clone();
+        }
+    }
+    name.to_string() // fall back to bare name and let the OS try
+}
+
 async fn resolve_host_port(
     config: &crate::db::types::ConnectionConfig,
 ) -> Result<(String, u16, Option<crate::db::ssh_tunnel::SshTunnel>, Option<crate::db::ssh_tunnel::OpenSshTunnel>), String> {
@@ -375,7 +392,7 @@ async fn run_backup(
             Ok(())
         }
         DbType::Postgresql => {
-            let mut cmd = tokio::process::Command::new("pg_dump");
+            let mut cmd = tokio::process::Command::new(resolve_bin("pg_dump"));
             cmd.env("PGPASSWORD", password);
             cmd.args(["-h", host, "-p", &port.to_string(), "-U", username, "-d", database]);
             cmd.args(flags);
@@ -385,7 +402,7 @@ async fn run_backup(
             stream_command(cmd, status).await
         }
         DbType::Mysql => {
-            let mut cmd = tokio::process::Command::new("mysqldump");
+            let mut cmd = tokio::process::Command::new(resolve_bin("mysqldump"));
             cmd.args([
                 &format!("-h{host}"),
                 &format!("-P{port}"),
@@ -465,14 +482,14 @@ async fn run_restore(
         DbType::Postgresql => {
             let use_psql = input_path.ends_with(".sql");
             let mut cmd = if use_psql {
-                let mut c = tokio::process::Command::new("psql");
+                let mut c = tokio::process::Command::new(resolve_bin("psql"));
                 c.env("PGPASSWORD", password);
                 c.args(["-h", host, "-p", &port.to_string(), "-U", username, "-d", database]);
                 c.args(flags);
                 c.arg("-f").arg(input_path);
                 c
             } else {
-                let mut c = tokio::process::Command::new("pg_restore");
+                let mut c = tokio::process::Command::new(resolve_bin("pg_restore"));
                 c.env("PGPASSWORD", password);
                 c.args(["-h", host, "-p", &port.to_string(), "-U", username, "-d", database]);
                 c.args(flags);
@@ -486,7 +503,7 @@ async fn run_restore(
         DbType::Mysql => {
             let input_file = std::fs::File::open(input_path)
                 .map_err(|e| format!("cannot open input file: {e}"))?;
-            let mut cmd = tokio::process::Command::new("mysql");
+            let mut cmd = tokio::process::Command::new(resolve_bin("mysql"));
             cmd.args([
                 &format!("-h{host}"),
                 &format!("-P{port}"),

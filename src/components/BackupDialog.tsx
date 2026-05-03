@@ -161,6 +161,13 @@ export function BackupDialog({ conn, onClose }: Props) {
     onClose();
   }
 
+  function handleCloseModal() {
+    if (jobId) removeJob(jobId).catch(() => {});
+    setJobId(null);
+    setJobStatus("idle");
+    setJobOutput("");
+  }
+
   const filteredConns = connections.filter(c => c.name.toLowerCase().includes(connSearch.toLowerCase()));
   const filteredDbs = databases.filter(d => d.toLowerCase().includes(dbSearch.toLowerCase()));
   const showGzip = selectedConn?.type === "postgresql" || selectedConn?.type === "mysql";
@@ -290,7 +297,7 @@ export function BackupDialog({ conn, onClose }: Props) {
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <span className="text-sm font-semibold">Backup database</span>
               {(jobStatus === "done" || jobStatus === "error") && (
-                <button onClick={handleDone} className="text-muted-foreground hover:text-foreground">
+                <button onClick={handleCloseModal} className="text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               )}
@@ -303,7 +310,7 @@ export function BackupDialog({ conn, onClose }: Props) {
                 <span className="text-xs text-muted-foreground animate-pulse">Running...</span>
               )}
               {(jobStatus === "done" || jobStatus === "error") && (
-                <button onClick={handleDone} className="px-4 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
+                <button onClick={handleCloseModal} className="px-4 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors">
                   Done
                 </button>
               )}

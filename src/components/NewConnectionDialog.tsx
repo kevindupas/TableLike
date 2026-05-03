@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { DbType, useConnectionStore, Tag, PasswordMode, SslMode, DEFAULT_TAGS } from "../store/connections";
 import { connectDb, savePassword, saveSshPassword, detectSshKeys, testSshConnection } from "../lib/tauri-commands";
+import { parseConnectionUrl } from "../lib/utils";
 
 interface DbOption {
   type: DbType;
@@ -757,6 +758,34 @@ export function NewConnectionDialog({ open, onClose, onNewGroup, onImportFile, o
 
                 {selectedOption?.type !== "sqlite" ? (
                   <>
+                    {/* URL import */}
+                    <FieldRow label="URL">
+                      <Input
+                        placeholder="postgresql://user:pass@host:5432/dbname"
+                        disabled={loading}
+                        className="h-8 text-sm font-mono"
+                        onChange={(e) => {
+                          const parsed = parseConnectionUrl(e.target.value);
+                          if (!parsed) return;
+                          setTestState("idle");
+                          setForm((f) => ({
+                            ...f,
+                            host: parsed.host || f.host,
+                            port: parsed.port || f.port,
+                            database: parsed.database || f.database,
+                            username: parsed.username || f.username,
+                            password: parsed.password || f.password,
+                          }));
+                        }}
+                      />
+                    </FieldRow>
+
+                    <div className="flex items-center gap-3 py-1">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-[11px] text-muted-foreground">OR</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+
                     {/* Host + Port */}
                     <FieldRow label="Host/Socket">
                       <div className="flex gap-2">

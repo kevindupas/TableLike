@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { X, Search } from "lucide-react";
 import { Connection, useConnectionStore } from "../store/connections";
 import { listDatabases, startBackup, getJobStatus, removeJob, getPassword, getSshPassword, getServerVersion } from "../lib/tauri-commands";
-import { save as openSaveDialog } from "@tauri-apps/plugin-dialog";
+import { save as openSaveDialog, message } from "@tauri-apps/plugin-dialog";
 
 const PG_FLAGS = [
   { flag: "--format=custom", defaultOn: true },
@@ -67,7 +67,6 @@ export function BackupDialog({ conn, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [serverVersion, setServerVersion] = useState<string>("");
-  const [showGzipWarning, setShowGzipWarning] = useState(false);
 
   useEffect(() => {
     if (!selectedConn) return;
@@ -148,7 +147,6 @@ export function BackupDialog({ conn, onClose }: Props) {
 
   async function proceedWithBackup() {
     if (!selectedConn || !selectedDb) return;
-    setShowGzipWarning(false);
     setError(null);
     try {
       const outputPath = await openSaveDialog({
@@ -182,7 +180,7 @@ export function BackupDialog({ conn, onClose }: Props) {
     if (!selectedConn || !selectedDb) return;
     setError(null);
     if (gzip && activeFlags.has("--format=custom")) {
-      setShowGzipWarning(true);
+      await message("You should use option --format=custom instead of Gzip", { title: "Warning", kind: "warning" });
       return;
     }
     await proceedWithBackup();
@@ -360,22 +358,6 @@ export function BackupDialog({ conn, onClose }: Props) {
         </button>
       </div>
 
-      {showGzipWarning && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/50">
-          <div className="w-80 bg-background border rounded-lg shadow-2xl p-6 flex flex-col gap-4">
-            <div>
-              <p className="text-sm font-semibold mb-1">Warning</p>
-              <p className="text-xs text-muted-foreground">You should use option --format=custom instead of Gzip</p>
-            </div>
-            <button
-              onClick={() => setShowGzipWarning(false)}
-              className="w-full py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Output modal */}
       {jobStatus !== "idle" && (

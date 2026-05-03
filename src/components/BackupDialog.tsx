@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Search } from "lucide-react";
 import { Connection, useConnectionStore } from "../store/connections";
-import { listDatabases, startBackup, getJobStatus, removeJob, getPassword, getSshPassword } from "../lib/tauri-commands";
+import { listDatabases, startBackup, getJobStatus, removeJob, getPassword, getSshPassword, getServerVersion } from "../lib/tauri-commands";
 import { save as openSaveDialog } from "@tauri-apps/plugin-dialog";
 
 const PG_FLAGS = [
@@ -66,6 +66,8 @@ export function BackupDialog({ conn, onClose }: Props) {
   const [jobStatus, setJobStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [serverVersion, setServerVersion] = useState<string>("");
+  const [showGzipWarning, setShowGzipWarning] = useState(false);
 
   useEffect(() => {
     if (!selectedConn) return;
@@ -94,6 +96,22 @@ export function BackupDialog({ conn, onClose }: Props) {
   }, [selectedConn?.id]);
 
   useEffect(() => {
+    if (!selectedConn || selectedConn.type === "sqlite") { setServerVersion(""); return; }
+    const load = async () => {
+      try {
+        const password = await getPassword(selectedConn.id).catch(() => "");
+        const sshPassword = selectedConn.ssh?.authMethod === "password"
+          ? await getSshPassword(selectedConn.id).catch(() => "") : undefined;
+        const v = await getServerVersion(buildConfig(selectedConn, password, sshPassword));
+        setServerVersion(v);
+      } catch {
+        setServerVersion("");
+      }
+    };
+    load();
+  }, [selectedConn?.id]);
+
+  useEffect(() => {
     if (!jobId) return;
     pollRef.current = setInterval(async () => {
       const status = await getJobStatus(jobId).catch(() => null);
@@ -107,14 +125,17 @@ export function BackupDialog({ conn, onClose }: Props) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [jobId]);
 
-  const flagList = selectedConn?.type === "postgresql" ? PG_FLAGS : selectedConn?.type === "mysql" ? MYSQL_FLAGS : [];
+  const flagList = selectedConn?.type === "postgresql" ? PG_FLAGS
+    : selectedConn?.type === "mysql" ? MYSQL_FLAGS : [];
 
-  function toggleFlag(flag: string) {
-    setActiveFlags(prev => {
-      const next = new Set(prev);
-      next.has(flag) ? next.delete(flag) : next.add(flag);
-      return next;
-    });
+  const availableFlags = flagList.filter(f => !activeFlags.has(f.flag));
+
+  function addFlag(flag: string) {
+    setActiveFlags(prev => new Set([...prev, flag]));
+  }
+
+  function removeFlag(flag: string) {
+    setActiveFlags(prev => { const next = new Set(prev); next.delete(flag); return next; });
   }
 
   function filename(): string {
@@ -125,8 +146,9 @@ export function BackupDialog({ conn, onClose }: Props) {
     return `${selectedDb}_${connSlug}_${date}${ext}${gzip ? ".gz" : ""}`;
   }
 
-  async function handleStartBackup() {
+  async function proceedWithBackup() {
     if (!selectedConn || !selectedDb) return;
+    setShowGzipWarning(false);
     setError(null);
     try {
       const outputPath = await openSaveDialog({
@@ -146,14 +168,24 @@ export function BackupDialog({ conn, onClose }: Props) {
 
       const flags = Array.from(activeFlags);
       if (gzip) flags.push("--gzip");
+      if (serverVersion) flags.push(`--server-version=${serverVersion}`);
 
       setJobId(id); setJobStatus("running"); setJobOutput(`Backup database '${selectedDb}'\nDumping...\n`);
-
       await startBackup(buildConfig(selectedConn, password, sshPassword), selectedDb, outputPath, flags, id);
     } catch (e) {
       setError(String(e));
       setJobStatus("idle");
     }
+  }
+
+  async function handleStartBackup() {
+    if (!selectedConn || !selectedDb) return;
+    setError(null);
+    if (gzip && activeFlags.has("--format=custom")) {
+      setShowGzipWarning(true);
+      return;
+    }
+    await proceedWithBackup();
   }
 
   function handleDone() {
@@ -246,21 +278,58 @@ export function BackupDialog({ conn, onClose }: Props) {
 
         {/* Col 3: Options */}
         <div className="flex-1 flex flex-col">
-          <div className="overflow-y-auto flex-1 p-4 space-y-1">
-            {flagList.length === 0 && selectedConn?.type === "sqlite" && (
-              <p className="text-xs text-muted-foreground">SQLite backup is a direct file copy. No options needed.</p>
-            )}
-            {flagList.map(f => (
-              <button
-                key={f.flag}
-                onClick={() => toggleFlag(f.flag)}
-                className={`w-full text-left px-3 py-1.5 text-xs rounded font-mono transition-colors ${activeFlags.has(f.flag) ? "bg-blue-500/20 text-blue-400 border border-blue-500/40" : "bg-muted/40 text-muted-foreground border border-transparent hover:bg-muted"}`}
+          {/* Version selector — pg/mysql only */}
+          {selectedConn && selectedConn.type !== "sqlite" && (
+            <div className="px-4 pt-4 pb-2 border-b flex items-center gap-2">
+              <select
+                value={serverVersion}
+                onChange={e => setServerVersion(e.target.value)}
+                className="flex-1 text-xs bg-muted border border-border rounded px-2 py-1 outline-none"
               >
-                {f.flag}
+                {!serverVersion && <option value="">Detecting...</option>}
+                {serverVersion && <option value={serverVersion}>{selectedConn.type === "postgresql" ? "PostgreSQL" : "MySQL"} {serverVersion}</option>}
+                {selectedConn.type === "postgresql"
+                  ? ["18.0","17.0","16.0","15.0","14.0","13.0","12.0","11.0","10.0","9.6","9.5","9.4"].filter(v => v !== serverVersion).map(v => (
+                      <option key={v} value={v}>PostgreSQL {v}</option>
+                    ))
+                  : ["8.0","5.7","5.6"].filter(v => v !== serverVersion).map(v => (
+                      <option key={v} value={v}>MySQL {v}</option>
+                    ))
+                }
+              </select>
+            </div>
+          )}
+
+          {/* Active flags as chips */}
+          <div className="overflow-y-auto flex-1 p-4 space-y-1">
+            {Array.from(activeFlags).map(flag => (
+              <button
+                key={flag}
+                onClick={() => removeFlag(flag)}
+                className="w-full text-left px-3 py-1.5 text-xs rounded font-mono transition-colors bg-blue-500/20 text-blue-400 border border-blue-500/40 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/40 group"
+              >
+                <span>{flag}</span>
+                <span className="float-right text-muted-foreground group-hover:text-red-400">×</span>
               </button>
             ))}
+
+            {availableFlags.length > 0 && (
+              <div className="pt-1">
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) addFlag(e.target.value); }}
+                  className="w-full text-xs bg-muted border border-border rounded px-2 py-1.5 outline-none text-muted-foreground font-mono"
+                >
+                  <option value="">Add option...</option>
+                  {availableFlags.map(f => (
+                    <option key={f.flag} value={f.flag}>{f.flag}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {showGzip && (
-              <label className="flex items-center gap-2 cursor-pointer pt-1">
+              <label className="flex items-center gap-2 cursor-pointer pt-2">
                 <input
                   type="checkbox"
                   checked={gzip}
@@ -271,6 +340,7 @@ export function BackupDialog({ conn, onClose }: Props) {
               </label>
             )}
           </div>
+
           {error && (
             <div className="px-4 py-2 text-xs text-destructive border-t">{error}</div>
           )}
@@ -289,6 +359,23 @@ export function BackupDialog({ conn, onClose }: Props) {
           Start backup...
         </button>
       </div>
+
+      {showGzipWarning && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/50">
+          <div className="w-80 bg-background border rounded-lg shadow-2xl p-6 flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-semibold mb-1">Warning</p>
+              <p className="text-xs text-muted-foreground">You should use option --format=custom instead of Gzip</p>
+            </div>
+            <button
+              onClick={() => setShowGzipWarning(false)}
+              className="w-full py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Output modal */}
       {jobStatus !== "idle" && (

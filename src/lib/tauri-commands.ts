@@ -92,6 +92,10 @@ export async function listDatabases(config: BackupRestoreConfig): Promise<string
   return invoke<string[]>("list_databases", { config });
 }
 
+export async function getServerVersion(config: BackupRestoreConfig): Promise<string> {
+  return invoke<string>("get_server_version", { config });
+}
+
 export async function startBackup(
   config: BackupRestoreConfig,
   database: string,

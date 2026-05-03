@@ -4,31 +4,68 @@ import { Connection, useConnectionStore } from "../store/connections";
 import { listDatabases, startBackup, getJobStatus, removeJob, getPassword, getSshPassword } from "../lib/tauri-commands";
 import { save as openSaveDialog } from "@tauri-apps/plugin-dialog";
 
-const PG_FLAGS = [
-  { flag: "--format=custom", defaultOn: true },
-  { flag: "--format=plain", defaultOn: false },
-  { flag: "--format=tar", defaultOn: false },
-  { flag: "--data-only", defaultOn: false },
-  { flag: "--schema-only", defaultOn: false },
-  { flag: "--clean", defaultOn: false },
-  { flag: "--create", defaultOn: false },
-  { flag: "--no-owner", defaultOn: false },
-  { flag: "--no-privileges", defaultOn: false },
-];
+type PgFormat = "custom" | "plain" | "tar";
 
-const MYSQL_FLAGS = [
-  { flag: "--single-transaction", defaultOn: true },
-  { flag: "--routines", defaultOn: false },
-  { flag: "--no-data", defaultOn: false },
-  { flag: "--add-drop-table", defaultOn: false },
-  { flag: "--add-drop-database", defaultOn: false },
-  { flag: "--no-tablespaces", defaultOn: false },
-  { flag: "--column-statistics=0", defaultOn: false },
-  { flag: "--lock-tables=false", defaultOn: false },
-  { flag: "--default-character-set=utf8mb4", defaultOn: false },
-  { flag: "--compress", defaultOn: false },
-  { flag: "--enable-cleartext-plugin", defaultOn: false },
-];
+interface PgOptions {
+  format: PgFormat;
+  dataOnly: boolean;
+  schemaOnly: boolean;
+  clean: boolean;
+  noOwner: boolean;
+  noPrivileges: boolean;
+  gzip: boolean;
+}
+
+interface MysqlOptions {
+  singleTransaction: boolean;
+  routines: boolean;
+  noData: boolean;
+  addDropTable: boolean;
+  noTablespaces: boolean;
+  gzip: boolean;
+}
+
+function pgOptionsToFlags(opts: PgOptions): string[] {
+  const flags: string[] = [`--format=${opts.format}`];
+  if (opts.dataOnly) flags.push("--data-only");
+  if (opts.schemaOnly) flags.push("--schema-only");
+  if (opts.clean) flags.push("--clean");
+  if (opts.noOwner) flags.push("--no-owner");
+  if (opts.noPrivileges) flags.push("--no-privileges");
+  // gzip only makes sense for plain/tar (custom is already compressed internally)
+  if (opts.gzip && opts.format !== "custom") flags.push("--compress=9");
+  return flags;
+}
+
+function mysqlOptionsToFlags(opts: MysqlOptions): string[] {
+  const flags: string[] = [];
+  if (opts.singleTransaction) flags.push("--single-transaction");
+  if (opts.routines) flags.push("--routines");
+  if (opts.noData) flags.push("--no-data");
+  if (opts.addDropTable) flags.push("--add-drop-table");
+  if (opts.noTablespaces) flags.push("--no-tablespaces");
+  // gzip flag passed separately — backend handles piping
+  return flags;
+}
+
+const DEFAULT_PG: PgOptions = {
+  format: "custom",
+  dataOnly: false,
+  schemaOnly: false,
+  clean: false,
+  noOwner: false,
+  noPrivileges: false,
+  gzip: false,
+};
+
+const DEFAULT_MYSQL: MysqlOptions = {
+  singleTransaction: true,
+  routines: false,
+  noData: false,
+  addDropTable: false,
+  noTablespaces: false,
+  gzip: false,
+};
 
 interface Props {
   conn: Connection | null;
@@ -50,6 +87,20 @@ function buildConfig(c: Connection, password: string, sshPassword?: string) {
   };
 }
 
+function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2.5 cursor-pointer group">
+      <div
+        onClick={() => onChange(!checked)}
+        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? "bg-blue-500 border-blue-500" : "border-border group-hover:border-blue-400"}`}
+      >
+        {checked && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+      </div>
+      <span className="text-xs text-foreground">{label}</span>
+    </label>
+  );
+}
+
 export function BackupDialog({ conn, onClose }: Props) {
   const { connections } = useConnectionStore();
   const [selectedConn, setSelectedConn] = useState<Connection | null>(conn);
@@ -59,17 +110,18 @@ export function BackupDialog({ conn, onClose }: Props) {
   const [dbSearch, setDbSearch] = useState("");
   const [dbLoading, setDbLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
-  const [activeFlags, setActiveFlags] = useState<Set<string>>(new Set());
+  const [pgOpts, setPgOpts] = useState<PgOptions>(DEFAULT_PG);
+  const [mysqlOpts, setMysqlOpts] = useState<MysqlOptions>(DEFAULT_MYSQL);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobOutput, setJobOutput] = useState("");
   const [jobStatus, setJobStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!selectedConn) return;
-    const flagList = selectedConn.type === "postgresql" ? PG_FLAGS : selectedConn.type === "mysql" ? MYSQL_FLAGS : [];
-    setActiveFlags(new Set(flagList.filter(f => f.defaultOn).map(f => f.flag)));
+    setPgOpts(DEFAULT_PG);
+    setMysqlOpts(DEFAULT_MYSQL);
   }, [selectedConn?.type]);
 
   useEffect(() => {
@@ -105,35 +157,36 @@ export function BackupDialog({ conn, onClose }: Props) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [jobId]);
 
-  const flagList = selectedConn?.type === "postgresql" ? PG_FLAGS : selectedConn?.type === "mysql" ? MYSQL_FLAGS : [];
-
-  function toggleFlag(flag: string) {
-    setActiveFlags(prev => {
-      const next = new Set(prev);
-      next.has(flag) ? next.delete(flag) : next.add(flag);
-      return next;
-    });
-  }
+  useEffect(() => {
+    if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
+  }, [jobOutput]);
 
   function filename(): string {
     if (!selectedConn || !selectedDb) return "untitled";
     const date = new Date().toISOString().slice(0, 10);
     const connSlug = selectedConn.name.replace(/[^a-zA-Z0-9]/g, "-");
-    const ext = selectedConn.type === "postgresql" ? ".dump" : selectedConn.type === "mysql" ? ".sql" : ".db";
-    return `${selectedDb}_${connSlug}_${date}${ext}`;
+    if (selectedConn.type === "postgresql") {
+      const gzip = pgOpts.gzip && pgOpts.format !== "custom";
+      const ext = pgOpts.format === "custom" ? ".dump" : pgOpts.format === "tar" ? ".tar" : ".sql";
+      return `${selectedDb}_${connSlug}_${date}${ext}${gzip ? ".gz" : ""}`;
+    }
+    if (selectedConn.type === "mysql") {
+      return `${selectedDb}_${connSlug}_${date}.sql${mysqlOpts.gzip ? ".gz" : ""}`;
+    }
+    return `${selectedDb}_${connSlug}_${date}.db`;
   }
 
   async function handleStartBackup() {
     if (!selectedConn || !selectedDb) return;
     setError(null);
     try {
+      const ext = selectedConn.type === "postgresql"
+        ? (pgOpts.format === "custom" ? ["dump"] : pgOpts.format === "tar" ? ["tar", "tar.gz"] : ["sql", "sql.gz"])
+        : selectedConn.type === "mysql" ? ["sql", "sql.gz"] : ["db", "sqlite"];
+
       const outputPath = await openSaveDialog({
         defaultPath: filename(),
-        filters: selectedConn.type === "postgresql"
-          ? [{ name: "Dump", extensions: ["dump", "sql", "tar"] }]
-          : selectedConn.type === "mysql"
-          ? [{ name: "SQL", extensions: ["sql"] }]
-          : [{ name: "SQLite", extensions: ["db", "sqlite"] }],
+        filters: [{ name: "Backup", extensions: ext }],
       });
       if (!outputPath || typeof outputPath !== "string") return;
 
@@ -142,9 +195,18 @@ export function BackupDialog({ conn, onClose }: Props) {
       const sshPassword = selectedConn.ssh?.authMethod === "password"
         ? await getSshPassword(selectedConn.id).catch(() => "") : undefined;
 
+      const flags = selectedConn.type === "postgresql"
+        ? pgOptionsToFlags(pgOpts)
+        : selectedConn.type === "mysql"
+        ? mysqlOptionsToFlags(mysqlOpts)
+        : [];
+
+      // Pass gzip as a special flag the backend can detect
+      if (selectedConn.type === "mysql" && mysqlOpts.gzip) flags.push("--gzip");
+
       setJobId(id); setJobStatus("running"); setJobOutput("");
 
-      await startBackup(buildConfig(selectedConn, password, sshPassword), selectedDb, outputPath, Array.from(activeFlags), id);
+      await startBackup(buildConfig(selectedConn, password, sshPassword), selectedDb, outputPath, flags, id);
     } catch (e) {
       setError(String(e));
       setJobStatus("idle");
@@ -159,6 +221,10 @@ export function BackupDialog({ conn, onClose }: Props) {
   const filteredConns = connections.filter(c => c.name.toLowerCase().includes(connSearch.toLowerCase()));
   const filteredDbs = databases.filter(d => d.toLowerCase().includes(dbSearch.toLowerCase()));
 
+  const isPg = selectedConn?.type === "postgresql";
+  const isMysql = selectedConn?.type === "mysql";
+  const isSqlite = selectedConn?.type === "sqlite";
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
@@ -169,18 +235,18 @@ export function BackupDialog({ conn, onClose }: Props) {
       </div>
 
       <div className="px-6 py-2 border-b shrink-0 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">File name: </span>
+        <span className="font-medium text-foreground">File: </span>
         <span className="font-mono">{filename()}</span>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Col 1: Connections */}
-        <div className="w-72 border-r flex flex-col">
+        <div className="w-64 border-r flex flex-col">
           <div className="flex items-center gap-2 px-3 py-2 border-b">
             <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <input
               value={connSearch} onChange={e => setConnSearch(e.target.value)}
-              placeholder="Search for connection..."
+              placeholder="Search connection..."
               className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground"
             />
           </div>
@@ -206,12 +272,12 @@ export function BackupDialog({ conn, onClose }: Props) {
         </div>
 
         {/* Col 2: Databases */}
-        <div className="w-64 border-r flex flex-col">
+        <div className="w-56 border-r flex flex-col">
           <div className="flex items-center gap-2 px-3 py-2 border-b">
             <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <input
               value={dbSearch} onChange={e => setDbSearch(e.target.value)}
-              placeholder="Search for database..."
+              placeholder="Search database..."
               className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground"
             />
           </div>
@@ -234,22 +300,66 @@ export function BackupDialog({ conn, onClose }: Props) {
         {/* Col 3: Options + output */}
         <div className="flex-1 flex flex-col">
           {jobStatus === "idle" ? (
-            <div className="overflow-y-auto flex-1 p-4 space-y-1">
-              {flagList.length === 0 && selectedConn?.type === "sqlite" && (
+            <div className="overflow-y-auto flex-1 p-5 space-y-5">
+              {isSqlite && (
                 <p className="text-xs text-muted-foreground">SQLite backup is a direct file copy. No options needed.</p>
               )}
-              {flagList.map(f => (
-                <button
-                  key={f.flag}
-                  onClick={() => toggleFlag(f.flag)}
-                  className={`w-full text-left px-3 py-1.5 text-xs rounded font-mono transition-colors ${activeFlags.has(f.flag) ? "bg-blue-500/20 text-blue-400 border border-blue-500/40" : "bg-muted/40 text-muted-foreground border border-transparent hover:bg-muted"}`}
-                >
-                  {f.flag}
-                </button>
-              ))}
+
+              {isPg && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Format</label>
+                    <select
+                      value={pgOpts.format}
+                      onChange={e => setPgOpts(o => ({ ...o, format: e.target.value as PgFormat }))}
+                      className="w-full text-xs bg-muted border border-border rounded px-2 py-1.5 outline-none focus:border-blue-500"
+                    >
+                      <option value="custom">Custom — compressed binary (recommended)</option>
+                      <option value="plain">Plain — SQL text file</option>
+                      <option value="tar">Tar — archive format</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Options</label>
+                    <Checkbox label="Data only (no schema)" checked={pgOpts.dataOnly} onChange={v => setPgOpts(o => ({ ...o, dataOnly: v, schemaOnly: v ? false : o.schemaOnly }))} />
+                    <Checkbox label="Schema only (no data)" checked={pgOpts.schemaOnly} onChange={v => setPgOpts(o => ({ ...o, schemaOnly: v, dataOnly: v ? false : o.dataOnly }))} />
+                    <Checkbox label="Clean (drop before create)" checked={pgOpts.clean} onChange={v => setPgOpts(o => ({ ...o, clean: v }))} />
+                    <Checkbox label="No owner" checked={pgOpts.noOwner} onChange={v => setPgOpts(o => ({ ...o, noOwner: v }))} />
+                    <Checkbox label="No privileges" checked={pgOpts.noPrivileges} onChange={v => setPgOpts(o => ({ ...o, noPrivileges: v }))} />
+                  </div>
+
+                  {pgOpts.format !== "custom" && (
+                    <div className="space-y-2.5">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Compression</label>
+                      <Checkbox label="Compress file using Gzip" checked={pgOpts.gzip} onChange={v => setPgOpts(o => ({ ...o, gzip: v }))} />
+                    </div>
+                  )}
+                  {pgOpts.format === "custom" && (
+                    <p className="text-xs text-muted-foreground">Custom format is already compressed internally.</p>
+                  )}
+                </>
+              )}
+
+              {isMysql && (
+                <>
+                  <div className="space-y-2.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Options</label>
+                    <Checkbox label="Single transaction (safe for InnoDB)" checked={mysqlOpts.singleTransaction} onChange={v => setMysqlOpts(o => ({ ...o, singleTransaction: v }))} />
+                    <Checkbox label="Include stored routines" checked={mysqlOpts.routines} onChange={v => setMysqlOpts(o => ({ ...o, routines: v }))} />
+                    <Checkbox label="Schema only (no data)" checked={mysqlOpts.noData} onChange={v => setMysqlOpts(o => ({ ...o, noData: v }))} />
+                    <Checkbox label="Add DROP TABLE statements" checked={mysqlOpts.addDropTable} onChange={v => setMysqlOpts(o => ({ ...o, addDropTable: v }))} />
+                    <Checkbox label="No tablespaces" checked={mysqlOpts.noTablespaces} onChange={v => setMysqlOpts(o => ({ ...o, noTablespaces: v }))} />
+                  </div>
+                  <div className="space-y-2.5">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Compression</label>
+                    <Checkbox label="Compress file using Gzip" checked={mysqlOpts.gzip} onChange={v => setMysqlOpts(o => ({ ...o, gzip: v }))} />
+                  </div>
+                </>
+              )}
             </div>
           ) : (
-            <div className="flex-1 bg-black p-4 font-mono text-xs text-green-400 overflow-y-auto whitespace-pre-wrap">
+            <div ref={outputRef} className="flex-1 bg-black p-4 font-mono text-xs text-green-400 overflow-y-auto whitespace-pre-wrap">
               {jobOutput || "Starting..."}
             </div>
           )}

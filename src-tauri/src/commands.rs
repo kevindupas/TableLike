@@ -365,7 +365,7 @@ async fn stream_command(
 
     let exit = child.wait().await.map_err(|e| e.to_string())?;
     if exit.success() {
-        status.lock().unwrap().output.push_str("Done.\n");
+        status.lock().unwrap().output.push_str("Restore database completed\n");
         Ok(())
     } else {
         Err(format!("process exited with status {exit}"))
@@ -385,23 +385,30 @@ async fn run_backup(
 ) -> Result<(), String> {
     use crate::db::types::DbType;
 
+    status.lock().unwrap().output.push_str(&format!("Backup database '{database}'\nDumping...\n"));
+
     match db_type {
         DbType::Sqlite => {
             std::fs::copy(database, output_path).map_err(|e| e.to_string())?;
-            status.lock().unwrap().output.push_str("SQLite database copied successfully.\n");
+            status.lock().unwrap().output.push_str("Backup database completed\n");
             Ok(())
         }
         DbType::Postgresql => {
+            // Strip our custom --gzip sentinel if present (pg uses --compress=9 instead)
+            let real_flags: Vec<&String> = flags.iter().filter(|f| f.as_str() != "--gzip").collect();
             let mut cmd = tokio::process::Command::new(resolve_bin("pg_dump"));
             cmd.env("PGPASSWORD", password);
             cmd.args(["-h", host, "-p", &port.to_string(), "-U", username, "-d", database]);
-            cmd.args(flags);
+            cmd.args(&real_flags);
             cmd.args(["-f", output_path]);
             cmd.stdout(std::process::Stdio::piped());
             cmd.stderr(std::process::Stdio::piped());
-            stream_command(cmd, status).await
+            stream_command_backup(cmd, status).await
         }
         DbType::Mysql => {
+            let use_gzip = flags.contains(&"--gzip".to_string());
+            let real_flags: Vec<&String> = flags.iter().filter(|f| f.as_str() != "--gzip").collect();
+
             let mut cmd = tokio::process::Command::new(resolve_bin("mysqldump"));
             cmd.args([
                 &format!("-h{host}"),
@@ -409,14 +416,98 @@ async fn run_backup(
                 &format!("-u{username}"),
                 &format!("-p{password}"),
             ]);
-            cmd.args(flags);
+            cmd.args(&real_flags);
             cmd.arg(database);
-            let output_file = std::fs::File::create(output_path)
-                .map_err(|e| format!("cannot create output file: {e}"))?;
-            cmd.stdout(output_file);
-            cmd.stderr(std::process::Stdio::piped());
-            stream_command(cmd, status).await
+
+            if use_gzip {
+                // Use std::process for the gzip pipeline (tokio ChildStdout can't be used as Stdio)
+                let output_path_s = output_path.to_string();
+                let database_s = database.to_string();
+                let host_s = host.to_string();
+                let port_n = port;
+                let username_s = username.to_string();
+                let password_s = password.to_string();
+                let real_flags_owned: Vec<String> = real_flags.iter().map(|s| s.to_string()).collect();
+                let status_clone = status.clone();
+
+                tokio::task::spawn_blocking(move || {
+                    use std::process::{Command, Stdio};
+
+                    let mut dump = Command::new(resolve_bin("mysqldump"))
+                        .args([
+                            &format!("-h{host_s}"),
+                            &format!("-P{port_n}"),
+                            &format!("-u{username_s}"),
+                            &format!("-p{password_s}"),
+                        ])
+                        .args(&real_flags_owned)
+                        .arg(&database_s)
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .map_err(|e| format!("spawn failed: {e}"))?;
+
+                    let dump_stdout = dump.stdout.take().ok_or("no stdout")?;
+                    let gz_file = std::fs::File::create(&output_path_s)
+                        .map_err(|e| format!("cannot create output file: {e}"))?;
+
+                    let mut gz = Command::new("gzip")
+                        .arg("-c")
+                        .stdin(dump_stdout)
+                        .stdout(gz_file)
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .map_err(|e| format!("spawn gzip failed: {e}"))?;
+
+                    let dump_exit = dump.wait().map_err(|e| e.to_string())?;
+                    let gz_exit = gz.wait().map_err(|e| e.to_string())?;
+
+                    if !dump_exit.success() { return Err(format!("mysqldump exited with {dump_exit}")); }
+                    if !gz_exit.success() { return Err(format!("gzip exited with {gz_exit}")); }
+
+                    status_clone.lock().unwrap().output.push_str("Backup database completed\n");
+                    Ok(())
+                })
+                .await
+                .map_err(|e| e.to_string())??;
+                return Ok(());
+            } else {
+                let output_file = std::fs::File::create(output_path)
+                    .map_err(|e| format!("cannot create output file: {e}"))?;
+                cmd.stdout(output_file);
+                cmd.stderr(std::process::Stdio::piped());
+                stream_command_backup(cmd, status).await
+            }
         }
+    }
+}
+
+async fn stream_command_backup(
+    mut cmd: tokio::process::Command,
+    status: std::sync::Arc<std::sync::Mutex<crate::db::jobs::JobStatus>>,
+) -> Result<(), String> {
+    use tokio::io::AsyncReadExt;
+
+    let mut child = cmd.spawn().map_err(|e| format!("spawn failed: {e}"))?;
+    let stderr = child.stderr.take();
+
+    if let Some(mut err) = stderr {
+        let status_clone = status.clone();
+        tokio::spawn(async move {
+            let mut buf = String::new();
+            let _ = err.read_to_string(&mut buf).await;
+            if !buf.is_empty() {
+                status_clone.lock().unwrap().output.push_str(&buf);
+            }
+        });
+    }
+
+    let exit = child.wait().await.map_err(|e| e.to_string())?;
+    if exit.success() {
+        status.lock().unwrap().output.push_str("Backup database completed\n");
+        Ok(())
+    } else {
+        Err(format!("process exited with status {exit}"))
     }
 }
 
@@ -477,10 +568,12 @@ async fn run_restore(
 ) -> Result<(), String> {
     use crate::db::types::DbType;
 
+    status.lock().unwrap().output.push_str(&format!("Restore database '{database}'\nRestoring...\n"));
+
     match db_type {
         DbType::Sqlite => {
             std::fs::copy(input_path, database).map_err(|e| e.to_string())?;
-            status.lock().unwrap().output.push_str("SQLite database restored successfully.\n");
+            status.lock().unwrap().output.push_str("Restore database completed\n");
             Ok(())
         }
         DbType::Postgresql => {

@@ -2,6 +2,7 @@ mod db;
 mod commands;
 
 use db::connection::ConnectionManager;
+use db::jobs::JobManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -10,6 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(ConnectionManager::new())
+        .manage(JobManager::new())
         .invoke_handler(tauri::generate_handler![
             commands::connect_db,
             commands::disconnect_db,
@@ -21,6 +23,8 @@ pub fn run() {
             commands::delete_password,
             commands::export_connections,
             commands::import_connections,
+            commands::detect_ssh_keys,
+            commands::test_ssh_connection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

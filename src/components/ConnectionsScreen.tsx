@@ -115,7 +115,7 @@ function ConnRow({ conn, tag, indent, isActive, isConn, isLoading, onClick, onDo
             )}
           </div>
           <div className="text-[10px] text-muted-foreground truncate italic">
-            {conn.type === "sqlite" ? conn.database : `${conn.host}:${conn.port}`}
+            {conn.type === "sqlite" ? conn.database : conn.ssh ? `SSH : ${conn.ssh.username}@${conn.ssh.host}` : `${conn.host}:${conn.port}`}
           </div>
         </div>
       </button>

@@ -26,6 +26,7 @@ pub fn run() {
             commands::detect_ssh_keys,
             commands::test_ssh_connection,
             commands::list_databases,
+            commands::get_server_version,
             commands::start_backup,
             commands::start_restore,
             commands::get_job_status,

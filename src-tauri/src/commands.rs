@@ -249,6 +249,34 @@ pub async fn list_databases(
     fetch_databases_pg_or_mysql(&config, &config.host.clone(), config.port).await
 }
 
+#[tauri::command]
+pub async fn get_server_version(
+    config: crate::db::types::ConnectionConfig,
+) -> Result<String, String> {
+    if config.ssh_host.is_some() {
+        let backend = config.ssh_backend.as_deref().unwrap_or("russh");
+        if backend == "openssh" {
+            let tunnel = crate::db::ssh_tunnel::OpenSshTunnel::connect(&config)
+                .await
+                .map_err(|e| format!("SSH tunnel: {e}"))?;
+            let port = tunnel.local_port;
+            let result = fetch_server_version_pg_or_mysql(&config, "127.0.0.1", port).await;
+            drop(tunnel);
+            return result;
+        } else {
+            let tunnel = crate::db::ssh_tunnel::SshTunnel::connect(&config)
+                .await
+                .map_err(|e| format!("SSH tunnel: {e}"))?;
+            let port = tunnel.local_port;
+            let result = fetch_server_version_pg_or_mysql(&config, "127.0.0.1", port).await;
+            drop(tunnel);
+            return result;
+        }
+    }
+
+    fetch_server_version_pg_or_mysql(&config, &config.host, config.port).await
+}
+
 async fn fetch_databases_pg_or_mysql(
     config: &crate::db::types::ConnectionConfig,
     host: &str,
@@ -300,6 +328,65 @@ async fn fetch_databases_pg_or_mysql(
         DbType::Sqlite => {
             Ok(vec![config.database.clone()])
         }
+    }
+}
+
+async fn fetch_server_version_pg_or_mysql(
+    config: &crate::db::types::ConnectionConfig,
+    host: &str,
+    port: u16,
+) -> Result<String, String> {
+    use crate::db::types::DbType;
+    use sqlx::Row;
+
+    match config.db_type {
+        DbType::Postgresql => {
+            use sqlx::postgres::PgConnectOptions;
+            let opts = PgConnectOptions::new()
+                .host(host)
+                .port(port)
+                .username(&config.username)
+                .password(&config.password)
+                .database("postgres");
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(1)
+                .connect_with(opts)
+                .await
+                .map_err(|e| e.to_string())?;
+            let row = sqlx::query("SELECT version()")
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            let full: String = row.get(0);
+            // Parse "PostgreSQL 14.5 on ..." -> "14.5"
+            let version = full
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("unknown")
+                .trim_end_matches(|c: char| !c.is_ascii_digit() && c != '.')
+                .to_string();
+            Ok(version)
+        }
+        DbType::Mysql => {
+            use sqlx::mysql::MySqlConnectOptions;
+            let opts = MySqlConnectOptions::new()
+                .host(host)
+                .port(port)
+                .username(&config.username)
+                .password(&config.password);
+            let pool = sqlx::mysql::MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect_with(opts)
+                .await
+                .map_err(|e| e.to_string())?;
+            let row = sqlx::query("SELECT version()")
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            let version: String = row.get(0);
+            Ok(version)
+        }
+        DbType::Sqlite => Ok("3".to_string()),
     }
 }
 

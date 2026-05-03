@@ -166,7 +166,6 @@ export function BackupDialog({ conn, onClose }: Props) {
 
       const flags = Array.from(activeFlags);
       if (gzip) flags.push("--gzip");
-      if (serverVersion) flags.push(`--server-version=${serverVersion}`);
 
       setJobId(id); setJobStatus("running"); setJobOutput(`Backup database '${selectedDb}'\nDumping...\n`);
       await startBackup(buildConfig(selectedConn, password, sshPassword), selectedDb, outputPath, flags, id);
@@ -179,10 +178,6 @@ export function BackupDialog({ conn, onClose }: Props) {
   async function handleStartBackup() {
     if (!selectedConn || !selectedDb) return;
     setError(null);
-    if (gzip && activeFlags.has("--format=custom")) {
-      await message("You should use option --format=custom instead of Gzip", { title: "Warning", kind: "warning" });
-      return;
-    }
     await proceedWithBackup();
   }
 
@@ -331,7 +326,12 @@ export function BackupDialog({ conn, onClose }: Props) {
                 <input
                   type="checkbox"
                   checked={gzip}
-                  onChange={e => setGzip(e.target.checked)}
+                  onChange={async e => {
+                    setGzip(e.target.checked);
+                    if (e.target.checked && activeFlags.has("--format=custom")) {
+                      await message("You should use option --format=custom instead of Gzip", { title: "Warning", kind: "warning" });
+                    }
+                  }}
                   className="rounded border-border accent-blue-500"
                 />
                 <span className="text-xs text-muted-foreground font-mono">Compress file using Gzip</span>

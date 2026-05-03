@@ -227,8 +227,6 @@ pub fn detect_ssh_keys() -> Vec<String> {
 pub async fn list_databases(
     config: crate::db::types::ConnectionConfig,
 ) -> Result<Vec<String>, String> {
-    use crate::db::types::DbType;
-
     if config.ssh_host.is_some() {
         let backend = config.ssh_backend.as_deref().unwrap_or("russh");
         if backend == "openssh" {
@@ -303,4 +301,260 @@ async fn fetch_databases_pg_or_mysql(
             Ok(vec![config.database.clone()])
         }
     }
+}
+
+async fn resolve_host_port(
+    config: &crate::db::types::ConnectionConfig,
+) -> Result<(String, u16, Option<crate::db::ssh_tunnel::SshTunnel>, Option<crate::db::ssh_tunnel::OpenSshTunnel>), String> {
+    if config.ssh_host.is_some() {
+        let backend = config.ssh_backend.as_deref().unwrap_or("russh");
+        if backend == "openssh" {
+            let tunnel = crate::db::ssh_tunnel::OpenSshTunnel::connect(config)
+                .await
+                .map_err(|e| format!("SSH: {e}"))?;
+            let port = tunnel.local_port;
+            Ok(("127.0.0.1".to_string(), port, None, Some(tunnel)))
+        } else {
+            let tunnel = crate::db::ssh_tunnel::SshTunnel::connect(config)
+                .await
+                .map_err(|e| format!("SSH: {e}"))?;
+            let port = tunnel.local_port;
+            Ok(("127.0.0.1".to_string(), port, Some(tunnel), None))
+        }
+    } else {
+        Ok((config.host.clone(), config.port, None, None))
+    }
+}
+
+async fn stream_command(
+    mut cmd: tokio::process::Command,
+    status: std::sync::Arc<std::sync::Mutex<crate::db::jobs::JobStatus>>,
+) -> Result<(), String> {
+    use tokio::io::AsyncReadExt;
+
+    let mut child = cmd.spawn().map_err(|e| format!("spawn failed: {e}"))?;
+    let stderr = child.stderr.take();
+
+    if let Some(mut err) = stderr {
+        let status_clone = status.clone();
+        tokio::spawn(async move {
+            let mut buf = String::new();
+            let _ = err.read_to_string(&mut buf).await;
+            if !buf.is_empty() {
+                status_clone.lock().unwrap().output.push_str(&buf);
+            }
+        });
+    }
+
+    let exit = child.wait().await.map_err(|e| e.to_string())?;
+    if exit.success() {
+        status.lock().unwrap().output.push_str("Done.\n");
+        Ok(())
+    } else {
+        Err(format!("process exited with status {exit}"))
+    }
+}
+
+async fn run_backup(
+    db_type: &crate::db::types::DbType,
+    host: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+    database: &str,
+    output_path: &str,
+    flags: &[String],
+    status: std::sync::Arc<std::sync::Mutex<crate::db::jobs::JobStatus>>,
+) -> Result<(), String> {
+    use crate::db::types::DbType;
+
+    match db_type {
+        DbType::Sqlite => {
+            std::fs::copy(database, output_path).map_err(|e| e.to_string())?;
+            status.lock().unwrap().output.push_str("SQLite database copied successfully.\n");
+            Ok(())
+        }
+        DbType::Postgresql => {
+            let mut cmd = tokio::process::Command::new("pg_dump");
+            cmd.env("PGPASSWORD", password);
+            cmd.args(["-h", host, "-p", &port.to_string(), "-U", username, "-d", database]);
+            cmd.args(flags);
+            cmd.args(["-f", output_path]);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            stream_command(cmd, status).await
+        }
+        DbType::Mysql => {
+            let mut cmd = tokio::process::Command::new("mysqldump");
+            cmd.args([
+                &format!("-h{host}"),
+                &format!("-P{port}"),
+                &format!("-u{username}"),
+                &format!("-p{password}"),
+            ]);
+            cmd.args(flags);
+            cmd.arg(database);
+            let output_file = std::fs::File::create(output_path)
+                .map_err(|e| format!("cannot create output file: {e}"))?;
+            cmd.stdout(output_file);
+            cmd.stderr(std::process::Stdio::piped());
+            stream_command(cmd, status).await
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn start_backup(
+    config: crate::db::types::ConnectionConfig,
+    database: String,
+    output_path: String,
+    flags: Vec<String>,
+    job_id: String,
+    job_manager: tauri::State<'_, crate::db::jobs::JobManager>,
+) -> Result<(), String> {
+    let status = job_manager.create_job(&job_id);
+
+    let (effective_host, effective_port, _tunnel_russh, _tunnel_openssh) =
+        resolve_host_port(&config).await?;
+
+    tokio::spawn(async move {
+        let result = run_backup(
+            &config.db_type,
+            &effective_host,
+            effective_port,
+            &config.username,
+            &config.password,
+            &database,
+            &output_path,
+            &flags,
+            status.clone(),
+        )
+        .await;
+
+        let mut s = status.lock().unwrap();
+        if let Err(e) = result {
+            s.status = "error".to_string();
+            s.output.push_str(&format!("\nERROR: {e}"));
+        } else {
+            s.status = "done".to_string();
+        }
+    });
+
+    Ok(())
+}
+
+async fn run_restore(
+    db_type: &crate::db::types::DbType,
+    host: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+    database: &str,
+    input_path: &str,
+    flags: &[String],
+    status: std::sync::Arc<std::sync::Mutex<crate::db::jobs::JobStatus>>,
+) -> Result<(), String> {
+    use crate::db::types::DbType;
+
+    match db_type {
+        DbType::Sqlite => {
+            std::fs::copy(input_path, database).map_err(|e| e.to_string())?;
+            status.lock().unwrap().output.push_str("SQLite database restored successfully.\n");
+            Ok(())
+        }
+        DbType::Postgresql => {
+            let use_psql = input_path.ends_with(".sql");
+            let mut cmd = if use_psql {
+                let mut c = tokio::process::Command::new("psql");
+                c.env("PGPASSWORD", password);
+                c.args(["-h", host, "-p", &port.to_string(), "-U", username, "-d", database]);
+                c.args(flags);
+                c.arg("-f").arg(input_path);
+                c
+            } else {
+                let mut c = tokio::process::Command::new("pg_restore");
+                c.env("PGPASSWORD", password);
+                c.args(["-h", host, "-p", &port.to_string(), "-U", username, "-d", database]);
+                c.args(flags);
+                c.arg(input_path);
+                c
+            };
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            stream_command(cmd, status).await
+        }
+        DbType::Mysql => {
+            let input_file = std::fs::File::open(input_path)
+                .map_err(|e| format!("cannot open input file: {e}"))?;
+            let mut cmd = tokio::process::Command::new("mysql");
+            cmd.args([
+                &format!("-h{host}"),
+                &format!("-P{port}"),
+                &format!("-u{username}"),
+                &format!("-p{password}"),
+            ]);
+            cmd.args(flags);
+            cmd.arg(database);
+            cmd.stdin(input_file);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            stream_command(cmd, status).await
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn start_restore(
+    config: crate::db::types::ConnectionConfig,
+    database: String,
+    input_path: String,
+    flags: Vec<String>,
+    job_id: String,
+    job_manager: tauri::State<'_, crate::db::jobs::JobManager>,
+) -> Result<(), String> {
+    let status = job_manager.create_job(&job_id);
+
+    let (effective_host, effective_port, _tunnel_russh, _tunnel_openssh) =
+        resolve_host_port(&config).await?;
+
+    tokio::spawn(async move {
+        let result = run_restore(
+            &config.db_type,
+            &effective_host,
+            effective_port,
+            &config.username,
+            &config.password,
+            &database,
+            &input_path,
+            &flags,
+            status.clone(),
+        )
+        .await;
+
+        let mut s = status.lock().unwrap();
+        if let Err(e) = result {
+            s.status = "error".to_string();
+            s.output.push_str(&format!("\nERROR: {e}"));
+        } else {
+            s.status = "done".to_string();
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_job_status(
+    job_id: String,
+    job_manager: tauri::State<'_, crate::db::jobs::JobManager>,
+) -> Option<crate::db::jobs::JobStatus> {
+    job_manager.get_status(&job_id)
+}
+
+#[tauri::command]
+pub fn remove_job(
+    job_id: String,
+    job_manager: tauri::State<'_, crate::db::jobs::JobManager>,
+) {
+    job_manager.remove(&job_id);
 }

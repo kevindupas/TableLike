@@ -26,6 +26,10 @@ pub fn run() {
             commands::detect_ssh_keys,
             commands::test_ssh_connection,
             commands::list_databases,
+            commands::start_backup,
+            commands::start_restore,
+            commands::get_job_status,
+            commands::remove_job,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

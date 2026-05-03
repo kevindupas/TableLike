@@ -431,10 +431,14 @@ pub async fn start_backup(
 ) -> Result<(), String> {
     let status = job_manager.create_job(&job_id);
 
-    let (effective_host, effective_port, _tunnel_russh, _tunnel_openssh) =
+    let (effective_host, effective_port, tunnel_russh, tunnel_openssh) =
         resolve_host_port(&config).await?;
 
     tokio::spawn(async move {
+        // Keep tunnels alive for the duration of the backup process
+        let _tunnel_russh = tunnel_russh;
+        let _tunnel_openssh = tunnel_openssh;
+
         let result = run_backup(
             &config.db_type,
             &effective_host,
@@ -531,10 +535,14 @@ pub async fn start_restore(
 ) -> Result<(), String> {
     let status = job_manager.create_job(&job_id);
 
-    let (effective_host, effective_port, _tunnel_russh, _tunnel_openssh) =
+    let (effective_host, effective_port, tunnel_russh, tunnel_openssh) =
         resolve_host_port(&config).await?;
 
     tokio::spawn(async move {
+        // Keep tunnels alive for the duration of the restore process
+        let _tunnel_russh = tunnel_russh;
+        let _tunnel_openssh = tunnel_openssh;
+
         let result = run_restore(
             &config.db_type,
             &effective_host,

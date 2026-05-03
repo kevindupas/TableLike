@@ -28,6 +28,8 @@ import { EditGroupDialog } from "./EditGroupDialog";
 import { ExportDialog } from "./ExportDialog";
 import { ImportDialog } from "./ImportDialog";
 import { ImportUrlDialog } from "./ImportUrlDialog";
+import { BackupDialog } from "./BackupDialog";
+import { RestoreDialog } from "./RestoreDialog";
 import { connectDb, getPassword, getSshPassword } from "../lib/tauri-commands";
 import { GroupAvatar } from "./GroupAvatar";
 
@@ -187,6 +189,8 @@ export function ConnectionsScreen() {
   const [importUrlOpen, setImportUrlOpen] = useState(false);
   const [exportState, setExportState] = useState<{ open: boolean; scope: ExportScope; groupId?: string; connId?: string }>({ open: false, scope: "all" });
   const [connCtx, setConnCtx] = useState<{ conn: Connection; x: number; y: number } | null>(null);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
   const [groupCtx, setGroupCtx] = useState<{ group: ConnectionGroup; x: number; y: number } | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -461,10 +465,10 @@ export function ConnectionsScreen() {
           </div>
         </div>
         <div className="px-6 py-2 space-y-2.5 mb-8">
-          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
+          <button onClick={() => setBackupOpen(true)} className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
             <HardDrive className="h-3.5 w-3.5 shrink-0" />Backup database...
           </button>
-          <button className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
+          <button onClick={() => setRestoreOpen(true)} className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
             <RotateCcw className="h-3.5 w-3.5 shrink-0" />Restore database...
           </button>
           <button onClick={() => setDialogOpen(true)} className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-md text-sm text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground transition-colors">
@@ -518,6 +522,8 @@ export function ConnectionsScreen() {
       <ExportDialog open={exportState.open} scope={exportState.scope} groupId={exportState.groupId} connId={exportState.connId} onClose={() => setExportState({ open: false, scope: "all" })} />
       <ImportDialog open={importOpen} onClose={() => { setImportOpen(false); setDialogOpen(true); }} />
       <ImportUrlDialog open={importUrlOpen} onClose={() => { setImportUrlOpen(false); setDialogOpen(true); }} />
+      {backupOpen && <BackupDialog conn={null} onClose={() => setBackupOpen(false)} />}
+      {restoreOpen && <RestoreDialog conn={null} onClose={() => setRestoreOpen(false)} />}
 
 
 
